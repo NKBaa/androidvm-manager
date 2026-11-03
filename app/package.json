@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "dist": "electron-builder --win",
+    "dist": "electron-builder --win --publish never",
     "dist:dir": "electron-builder --win --dir"
   },
   "devDependencies": {
@@ -25,6 +25,13 @@
       "output": "../dist",
       "buildResources": "build"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "NKBaa",
+        "repo": "androidvm-manager"
+      }
+    ],
     "asar": true,
     "asarUnpack": [
       "src/**",
@@ -107,5 +114,8 @@
       "requestExecutionLevel": "admin",
       "artifactName": "AndroidVM-Portable-${version}.${ext}"
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
   }
 }

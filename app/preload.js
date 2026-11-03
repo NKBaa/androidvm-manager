@@ -28,6 +28,23 @@ contextBridge.exposeInMainWorld('api', {
   windows: {
     arrange: (layout) => invoke('windows:arrange', layout),
   },
+  update: {
+    check: () => invoke('update:check'),
+    download: () => invoke('update:download'),
+    install: () => invoke('update:install'),
+    state: () => invoke('update:state'),
+    onStatus: (cb) => {
+      const h = (_e, data) => cb(data);
+      ipcRenderer.on('update:status', h);
+      return () => ipcRenderer.removeListener('update:status', h);
+    },
+  },
+  // 托盘「检查更新」→ 界面打开更新对话框
+  onOpenUpdate: (cb) => {
+    const h = () => cb();
+    ipcRenderer.on('app:openUpdate', h);
+    return () => ipcRenderer.removeListener('app:openUpdate', h);
+  },
   camera: {
     hosts: () => invoke('camera:hosts'),
     status: () => invoke('camera:status'),
@@ -37,6 +54,14 @@ contextBridge.exposeInMainWorld('api', {
     captureScreen: () => invoke('camera:captureScreen'),
     crop: (o) => invoke('camera:crop', o),
     pickImage: () => invoke('camera:pickImage'),
+    liveStart: (o) => invoke('camera:liveStart', o),
+    liveStop: () => invoke('camera:liveStop'),
+    liveStatus: () => invoke('camera:liveStatus'),
+    onLiveFrame: (cb) => {
+      const h = (_e, data) => cb(data);
+      ipcRenderer.on('camera:live', h);
+      return () => ipcRenderer.removeListener('camera:live', h);
+    },
   },
   config: {
     get: () => invoke('config:get'),

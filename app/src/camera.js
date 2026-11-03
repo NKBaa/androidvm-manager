@@ -245,6 +245,80 @@ function cropAndSave(dataUrl, rect, name) {
   return saveImage(cropped.toDataURL(), name);
 }
 
+// ---------------- 实时跟随屏幕区域 ----------------
+//
+// 说明：Android 模拟器的摄像头**无法接收实时帧流**。
+//   实测 `imagefile:` 与 `virtualscene` 在本机都会静默回退成 `emulated`，
+//   控制台的 `virtualscene-image` 命令返回 OK 但画面不变。
+//   真正把任意画面喂进摄像头需要 Windows 虚拟摄像头驱动（DirectShow 源滤镜）。
+//
+// 所以这里做的是「尽可能接近实时」的方案：
+//   定时抓取屏幕区域 → 覆盖写入同一个 png → 供 imagefile 模式读取，
+//   同时把每一帧推给界面做实时预览。
+//   在支持 imagefile 的模拟器/机器上，这就是真的跟随；
+//   不支持时至少用户能在界面里看到实时的画面源。
+
+let liveTimer = null;
+let liveState = { on: false, rect: null, intervalMs: 2000, file: null };
+
+function liveFilePath() {
+  return path.join(ensureImageDir(), 'live-region.png');
+}
+
+/**
+ * 开始实时跟随。
+ * @param {{rect:{x,y,w,h}, intervalMs:number, onFrame:function}} opts
+ */
+async function startLive({ rect, intervalMs = 2000, onFrame } = {}) {
+  stopLive();
+  const file = liveFilePath();
+  const interval = Math.max(500, Math.min(10000, Number(intervalMs) || 2000));
+  liveState = { on: true, rect, intervalMs: interval, file };
+
+  const tick = async () => {
+    if (!liveState.on) return;
+    try {
+      const { nativeImage } = require('electron');
+      const shot = await captureScreen();
+      const img = nativeImage.createFromDataURL(shot.dataUrl);
+      const size = img.getSize();
+      const r = liveState.rect || { x: 0, y: 0, w: size.width, h: size.height };
+      const x = Math.max(0, Math.round(r.x));
+      const y = Math.max(0, Math.round(r.y));
+      const w = Math.min(size.width - x, Math.round(r.w));
+      const h = Math.min(size.height - y, Math.round(r.h));
+      if (w <= 0 || h <= 0) throw new Error('选区无效');
+
+      const cropped = img.crop({ x, y, width: w, height: h });
+      const png = cropped.toPNG();
+      fs.writeFileSync(file, png);
+
+      if (liveState.on && typeof onFrame === 'function') {
+        onFrame({ dataUrl: cropped.toDataURL(), bytes: png.length, at: Date.now(), file });
+      }
+    } catch (e) {
+      if (liveState.on && typeof onFrame === 'function') onFrame({ error: e.message });
+    }
+  };
+
+  await tick();
+  liveTimer = setInterval(tick, interval);
+  return { ok: true, file, intervalMs: interval };
+}
+
+function stopLive() {
+  if (liveTimer) {
+    clearInterval(liveTimer);
+    liveTimer = null;
+  }
+  liveState = { ...liveState, on: false };
+  return { ok: true };
+}
+
+function liveStatus() {
+  return { ...liveState, timer: !!liveTimer };
+}
+
 module.exports = {
   listHostCameras,
   getStatus,
@@ -257,4 +331,8 @@ module.exports = {
   captureScreen,
   cropAndSave,
   ensureImageDir,
+  startLive,
+  stopLive,
+  liveStatus,
+  liveFilePath,
 };

@@ -3,6 +3,9 @@
 const $ = (id) => document.getElementById(id);
 // 注意：window.api 已由 preload 注入，这里用局部别名避免全局重名
 const bridge = window.api;
+// 多语言：静态文案走 data-i18n，动态文案走 t()
+const i18n = window.i18n || { t: (k) => k, applyI18n: () => {}, nextLang: () => 'zh-CN', setLang: () => {}, lang: 'zh-CN' };
+const t = i18n.t;
 
 let config = null;
 let statusTimer = null;
@@ -702,18 +705,87 @@ function drawRegionSel(a, b) {
   $('btnRegionOk').disabled = regionState.rect.w < 8 || regionState.rect.h < 8;
 }
 
-$('btnCamRegion').addEventListener('click', async () => {
-  const shot = await call(bridge.camera.captureScreen(), '抓取屏幕', true);
-  if (!shot) return;
-  regionState.dataUrl = shot.dataUrl;
-  regionState.imgW = shot.width;
-  regionState.imgH = shot.height;
-  regionState.rect = null;
-  $('regionImg').src = shot.dataUrl;
-  $('regionSel').style.display = 'none';
-  $('regionSize').textContent = '';
-  $('btnRegionOk').disabled = true;
-  $('regionModal').style.display = 'flex';
+// ---------- 摄像头：实时跟随屏幕区域 ----------
+let camLiveUnsub = null;
+let regionMode = 'still'; // still = 抓一帧存素材；live = 实时跟随
+
+function onCamLiveFrame(f) {
+  if (!f) return;
+  if (f.error) {
+    $('camLiveMeta').textContent = '抓帧失败：' + f.error;
+    return;
+  }
+  $('camLivePreview').src = f.dataUrl;
+  const t = new Date(f.at);
+  const pad = (n) => String(n).padStart(2, '0');
+  $('camLiveMeta').textContent =
+    `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())} · ${(f.bytes / 1024).toFixed(0)} KB`;
+}
+
+async function startCamLive(rect) {
+  $('camLiveBox').style.display = '';
+  $('camLiveHint').style.display = '';
+  $('btnCamLive').style.display = 'none';
+  $('btnCamLiveStop').style.display = '';
+
+  if (!camLiveUnsub) camLiveUnsub = bridge.camera.onLiveFrame(onCamLiveFrame);
+  const r = await call(bridge.camera.liveStart({ rect, intervalMs: 2000 }), '开始实时跟随');
+  if (!r) {
+    await stopCamLive();
+    return;
+  }
+
+  // 同时把后置摄像头指向这个实时图片（支持 imagefile 的机器上就是真跟随）
+  const set = await call(
+    bridge.camera.set({ back: { mode: 'imagefile', path: r.file } }),
+    '切换到实时素材',
+    true
+  );
+  if (set && set.ok) {
+    toast('已开始实时跟随，重启虚拟机后摄像头会使用该画面', 'ok');
+  } else {
+    toast('已开始实时跟随（仅预览）', 'ok');
+  }
+  await refreshCamData();
+}
+
+async function stopCamLive() {
+  await call(bridge.camera.liveStop(), '停止实时跟随', true);
+  $('camLiveBox').style.display = 'none';
+  $('camLiveHint').style.display = 'none';
+  $('btnCamLive').style.display = '';
+  $('btnCamLiveStop').style.display = 'none';
+  $('camLivePreview').removeAttribute('src');
+}
+
+$('btnCamLive').addEventListener('click', () => {
+  regionMode = 'live';
+  $('regionHint').textContent = '按住鼠标拖动，框选要实时跟随的屏幕区域';
+  openRegionSelector();
+});
+
+$('btnCamLiveStop').addEventListener('click', stopCamLive);
+
+function openRegionSelector() {
+  return (async () => {
+    const shot = await call(bridge.camera.captureScreen(), '抓取屏幕', true);
+    if (!shot) return;
+    regionState.dataUrl = shot.dataUrl;
+    regionState.imgW = shot.width;
+    regionState.imgH = shot.height;
+    regionState.rect = null;
+    $('regionImg').src = shot.dataUrl;
+    $('regionSel').style.display = 'none';
+    $('regionSize').textContent = '';
+    $('btnRegionOk').disabled = true;
+    $('regionModal').style.display = 'flex';
+  })();
+}
+
+$('btnCamRegion').addEventListener('click', () => {
+  regionMode = 'still';
+  $('regionHint').textContent = '按住鼠标拖动，框选要作为摄像头画面的区域';
+  openRegionSelector();
 });
 
 $('regionStage').addEventListener('mousedown', (ev) => {
@@ -743,10 +815,19 @@ $('btnRegionCancel').addEventListener('click', () => {
 
 $('btnRegionOk').addEventListener('click', async () => {
   if (!regionState.rect) return;
+  const rect = { ...regionState.rect };
+
+  // 实时跟随模式：不存素材，直接把选区交给定时抓帧
+  if (regionMode === 'live') {
+    $('regionModal').style.display = 'none';
+    await startCamLive(rect);
+    return;
+  }
+
   const r = await call(
     bridge.camera.crop({
       dataUrl: regionState.dataUrl,
-      rect: regionState.rect,
+      rect,
       name: 'region-' + new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14),
     }),
     '保存选区'
@@ -901,17 +982,23 @@ let appInfo = null;
 
 async function loadSdkMirrors() {
   if (sdkMirrorsLoaded) return;
-  const r = await call(bridge.sdk.mirrors(), '读取镜像源', true);
   const sel = $('sdkMirror');
-  if (!r || !sel) return;
+  if (!sel) return;
+  sel.innerHTML = '<option>探测镜像速度…</option>';
+  const r = await call(bridge.sdk.mirrors(), '探测镜像', true);
+  if (!r) return;
   sel.innerHTML = '';
   for (const m of r.mirrors || []) {
     const o = document.createElement('option');
     o.value = m.id;
-    o.textContent = m.name;
+    let label = m.name;
+    if (m.ms != null) label += ` · ${m.ms}ms`;
+    else if (m.ok === false) label += '（不可用）';
+    if (m.recommended) label += ' ★';
+    o.textContent = label;
     sel.appendChild(o);
   }
-  sel.value = r.default || 'google';
+  sel.value = r.default || 'auto';
   sdkMirrorsLoaded = true;
 }
 
@@ -994,6 +1081,14 @@ function onSdkProgress(d) {
     const pct = d.overallPercent || 0;
     $('sdkBar').style.width = pct.toFixed(1) + '%';
     $('sdkPct').textContent = pct.toFixed(0) + '%';
+    return;
+  }
+  if (phase === 'probe') { $('sdkPhase').textContent = d.message || '正在探测镜像速度…'; return; }
+  if (phase === 'probe-done') {
+    const ok = (d.detail || []).filter((x) => x.ms != null).sort((a, b) => a.ms - b.ms);
+    $('sdkPhase').textContent = ok.length
+      ? `已选择最快镜像：${ok[0].name}（${ok[0].ms}ms）`
+      : '镜像探测完成';
     return;
   }
   if (phase === 'resolve') { $('sdkPhase').textContent = d.message || '解析组件清单…'; return; }
@@ -1079,6 +1174,13 @@ document.querySelectorAll('.rail-btn[data-view]').forEach((b) => {
   b.addEventListener('click', () => switchView(b.dataset.view));
 });
 
+// 语言切换：中 / EN
+$('btnLang').addEventListener('click', () => {
+  i18n.setLang(i18n.nextLang());
+  renderDeviceGrid();
+  toast(i18n.lang === 'en-US' ? 'Language: English' : '界面语言：中文', 'ok');
+});
+
 // ==================== 设备网格 ====================
 let devCache = [];
 let devActiveId = null;
@@ -1123,9 +1225,9 @@ async function refreshThumbs() {
 }
 
 function devStatusOf(it) {
-  if (it.online) return { text: '运行中', running: true };
-  if (it.listening || it.booting) return { text: '启动中', running: false };
-  return { text: '未开机', running: false };
+  if (it.online) return { text: t('status.on'), running: true };
+  if (it.listening || it.booting) return { text: t('status.booting'), running: false };
+  return { text: t('status.off'), running: false };
 }
 
 function renderDeviceGrid() {
@@ -1144,7 +1246,7 @@ function renderDeviceGrid() {
   else if (devSortMode === 'status') list.sort((a, b) => Number(b.online) - Number(a.online));
 
   if (!list.length) {
-    box.innerHTML = `<div class="dev-empty">${devQuery ? '没有匹配的设备' : '还没有设备，点左上角「＋ 新建设备」创建'}</div>`;
+    box.innerHTML = `<div class="dev-empty">${devQuery ? t('card.noMatch') : t('card.empty')}</div>`;
     return;
   }
 
@@ -1170,7 +1272,7 @@ function renderDeviceGrid() {
            <div class="dev-name">${escapeHtml(it.name)}</div>
            <div class="dev-tags">
              <span class="tag">Android 14</span>
-             <span class="tag">${s.cores || 4} 核</span>
+             <span class="tag">${s.cores || 4} ${t('card.cores')}</span>
              <span class="tag">${Math.round((s.ram || 4096) / 1024)} GB</span>
              ${s.root ? '<span class="tag">Root</span>' : ''}
            </div>
@@ -1299,10 +1401,10 @@ async function handleCtxAction(act, it) {
 
     case 'rename': {
       const name = await askText({
-        title: '重命名设备',
-        desc: '只影响管理器里的显示名称，不会改动虚拟机内部。',
+        title: t('dlg.renameTitle'),
+        desc: t('dlg.renameDesc'),
         value: it.name,
-        placeholder: '设备名称',
+        placeholder: 'Device name',
       });
       if (!name || name === it.name) return;
       const r = await call(bridge.instances.rename(it.id, name), '重命名');
@@ -1633,6 +1735,64 @@ $('btnRailSettings').addEventListener('click', () => {
   openDevSettings(it);
 });
 
+// ==================== 检查更新 ====================
+let updateState = { phase: 'idle' };
+let updateUnsub = null;
+
+function renderUpdate(s) {
+  if (!s) return;
+  updateState = s;
+  const action = $('updateAction');
+  const barWrap = $('updateBarWrap');
+  const notes = $('updateNotes');
+
+  $('updateMsg').textContent = s.message || '—';
+  barWrap.style.display = s.phase === 'downloading' ? '' : 'none';
+  if (s.phase === 'downloading') $('updateBar').style.width = (s.percent || 0).toFixed(1) + '%';
+
+  const hasNotes = !!(s.info && s.info.notes);
+  notes.style.display = hasNotes ? '' : 'none';
+  if (hasNotes) notes.textContent = String(s.info.notes).replace(/<[^>]+>/g, '').trim();
+
+  if (s.phase === 'available') {
+    action.style.display = '';
+    action.textContent = '下载更新';
+    action.disabled = false;
+  } else if (s.phase === 'downloaded') {
+    action.style.display = '';
+    action.textContent = '立即安装';
+    action.disabled = false;
+  } else {
+    action.style.display = 'none';
+  }
+
+  $('updateBadge').style.display = s.phase === 'available' || s.phase === 'downloaded' ? '' : 'none';
+}
+
+async function openUpdateDialog() {
+  $('updateDlg').style.display = 'flex';
+  renderUpdate({ phase: 'checking', message: '正在检查更新…' });
+  if (!updateUnsub) updateUnsub = bridge.update.onStatus(renderUpdate);
+  const s = await call(bridge.update.check(), '检查更新', true);
+  if (s) renderUpdate(s);
+}
+
+$('btnRailUpdate').addEventListener('click', openUpdateDialog);
+$('updateClose').addEventListener('click', () => {
+  $('updateDlg').style.display = 'none';
+});
+$('updateDlg').addEventListener('click', (e) => {
+  if (e.target === $('updateDlg')) $('updateDlg').style.display = 'none';
+});
+$('updateAction').addEventListener('click', async () => {
+  if (updateState.phase === 'downloaded') {
+    await call(bridge.update.install(), '安装更新', true);
+    return;
+  }
+  $('updateAction').disabled = true;
+  await call(bridge.update.download(), '下载更新', true);
+});
+
 // ---------- 启动器工具栏 ----------
 $('btnNewDevice').addEventListener('click', async () => {
   const r = await call(bridge.instances.create({}), '新建设备');
@@ -1770,6 +1930,7 @@ $('devSearch').addEventListener('input', (e) => {
 
 // ---------- 初始化 ----------
 (async function init() {
+  i18n.applyI18n();
   await checkSdk();
   buildPresets();
   await refreshInstances();
@@ -1800,6 +1961,18 @@ $('devSearch').addEventListener('input', (e) => {
   // 缩略图单独慢速刷新（抓图比查状态贵得多）
   setTimeout(refreshThumbs, 1200);
   thumbTimer = setInterval(refreshThumbs, 10000);
+
+  // 启动后静默检查一次更新（只在有可用更新时点亮图标栏红点）
+  setTimeout(async () => {
+    const st = await call(bridge.update.state(), '更新状态', true);
+    if (!st || !st.packaged) return;
+    if (!updateUnsub) updateUnsub = bridge.update.onStatus(renderUpdate);
+    const r = await call(bridge.update.check(), '检查更新', true);
+    if (r) renderUpdate(r);
+  }, 3000);
+
+  // 托盘菜单「检查更新」
+  if (typeof bridge.onOpenUpdate === 'function') bridge.onOpenUpdate(openUpdateDialog);
 })().catch((e) => {
   // 初始化失败时别静默 —— 否则界面看着正常但功能全哑
   console.error('初始化失败:', e);

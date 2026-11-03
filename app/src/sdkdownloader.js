@@ -31,8 +31,98 @@ const MIRRORS = [
 
 const DEFAULT_MIRROR = 'google';
 
+/** 自动择优的候选（不含 auto 自身） */
+const PROBE_ORDER = ['google', 'tencent'];
+
 function getMirror(id) {
+  if (id === 'auto') {
+    const best = pickFastestMirrorSync();
+    return MIRRORS.find((m) => m.id === best) || MIRRORS.find((m) => m.id === DEFAULT_MIRROR);
+  }
   return MIRRORS.find((m) => m.id === id) || MIRRORS.find((m) => m.id === DEFAULT_MIRROR);
+}
+
+// ---------------------------------------------------------------
+// 镜像自动择优
+//
+// 对每个镜像的 repository2-3.xml 发一次请求，取「首字节到达时间」，
+// 谁快用谁。结果缓存 10 分钟，避免每次下载都重新探测。
+// ---------------------------------------------------------------
+let mirrorProbeCache = { at: 0, best: DEFAULT_MIRROR, detail: [] };
+const PROBE_TTL = 10 * 60 * 1000;
+
+function probeOne(id) {
+  const m = MIRRORS.find((x) => x.id === id);
+  if (!m) return Promise.resolve({ id, ms: Infinity, ok: false });
+  const url = m.base + 'repository2-3.xml';
+  const started = Date.now();
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (ok) => {
+      if (settled) return;
+      settled = true;
+      resolve({ id, name: m.name, ms: ok ? Date.now() - started : Infinity, ok });
+    };
+    try {
+      const req = request(url, { headers: { Range: 'bytes=0-1023' } });
+      const timer = setTimeout(() => {
+        done(false);
+        try { req.then((r) => r.resume()).catch(() => {}); } catch {}
+      }, 6000);
+      req
+        .then((res) => {
+          clearTimeout(timer);
+          res.resume();
+          done(res.statusCode === 200 || res.statusCode === 206);
+        })
+        .catch(() => {
+          clearTimeout(timer);
+          done(false);
+        });
+    } catch {
+      done(false);
+    }
+  });
+}
+
+/** 并发探测所有镜像，返回按速度排序的结果 */
+async function probeMirrors({ force = false } = {}) {
+  if (!force && mirrorProbeCache.detail.length && Date.now() - mirrorProbeCache.at < PROBE_TTL) {
+    return mirrorProbeCache.detail;
+  }
+  const results = await Promise.all(PROBE_ORDER.map(probeOne));
+  results.sort((a, b) => a.ms - b.ms);
+  const best = results.find((r) => r.ok) || { id: DEFAULT_MIRROR };
+  mirrorProbeCache = { at: Date.now(), best: best.id, detail: results };
+  return results;
+}
+
+/** 同步拿上次探测结果（没探测过就用默认） */
+function pickFastestMirrorSync() {
+  return mirrorProbeCache.best || DEFAULT_MIRROR;
+}
+
+/** 给界面用：探测并返回带推荐标记的镜像列表 */
+async function listMirrorsWithSpeed() {
+  const detail = await probeMirrors();
+  const bestId = (detail.find((d) => d.ok) || {}).id || DEFAULT_MIRROR;
+  return {
+    mirrors: [
+      { id: 'auto', name: '自动（择优）', auto: true },
+      ...MIRRORS.map((m) => {
+        const d = detail.find((x) => x.id === m.id);
+        return {
+          id: m.id,
+          name: m.name,
+          ms: d && d.ok ? d.ms : null,
+          ok: !!(d && d.ok),
+          recommended: m.id === bestId,
+        };
+      }),
+    ],
+    default: 'auto',
+    best: bestId,
+  };
 }
 
 /** 各清单相对于镜像 base 的路径 */
@@ -286,10 +376,23 @@ function extractZip(zip, destDir) {
  */
 async function install({ sdkRoot, packages, mirror, onProgress, isCancelled } = {}) {
   const pkgs = packages && packages.length ? packages : PRESETS.minimal;
-  const m = getMirror(mirror);
   const emit = (o) => { if (onProgress) onProgress(o); };
   const check = () => { if (isCancelled && isCancelled()) throw new Error('已取消'); };
 
+  // 自动择优：先并发探测，选响应最快的镜像
+  let mirrorId = mirror || DEFAULT_MIRROR;
+  if (mirrorId === 'auto') {
+    emit({ phase: 'probe', message: '正在探测镜像速度…' });
+    const detail = await probeMirrors();
+    mirrorId = (detail.find((d) => d.ok) || {}).id || DEFAULT_MIRROR;
+    emit({
+      phase: 'probe-done',
+      mirror: mirrorId,
+      detail: detail.map((d) => ({ id: d.id, name: d.name, ms: d.ok ? d.ms : null })),
+    });
+  }
+
+  const m = getMirror(mirrorId);
   emit({ phase: 'resolve', message: `解析组件清单（${m.name}）…`, mirror: m.id });
   const resolved = await resolvePackages(pkgs, { mirror: m.id, onProgress: emit });
   const totalBytes = resolved.reduce((s, r) => s + (r.size || 0), 0);
@@ -409,6 +512,8 @@ module.exports = {
   DEFAULT_MIRROR,
   PRESETS,
   getMirror,
+  probeMirrors,
+  listMirrorsWithSpeed,
   resolvePackages,
   downloadFile,
   extractZip,

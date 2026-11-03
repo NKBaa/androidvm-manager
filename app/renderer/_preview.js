@@ -14,6 +14,11 @@
   const dlg = q.get('dlg');
 
   setTimeout(() => {
+    // 语言：?lang=en 切到英文
+    if (q.get('lang') && window.i18n) {
+      window.i18n.setLang(q.get('lang') === 'en' ? 'en-US' : 'zh-CN');
+    }
+
     if (view !== 'launcher') {
       // 先切到工作区视图，标签按钮才可见
       const ws = document.querySelector('.rail-btn[data-view="workspace"]');
@@ -68,6 +73,9 @@
           if (b) b.click();
         } else if (which === 'arrange') {
           const b = document.getElementById('btnArrange');
+          if (b) b.click();
+        } else if (which === 'update') {
+          const b = document.getElementById('btnRailUpdate');
           if (b) b.click();
         } else if (more) {
           more.click();

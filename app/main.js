@@ -113,12 +113,14 @@ async function buildTrayMenu() {
   const reg = instances.load();
   const list = reg.list || [];
   const items = [];
+  let runningCount = 0;
   for (const it of list) {
     let running = false;
     try {
       const st = await managerFor(it).status();
       running = !!(st && st.running);
     } catch {}
+    if (running) runningCount++;
     items.push({
       label: `${it.name}${running ? ' · 运行中' : ''}`,
       submenu: [
@@ -141,11 +143,34 @@ async function buildTrayMenu() {
   }
   if (!items.length) items.push({ label: '还没有设备', enabled: false });
 
+  // 托盘提示同步显示运行数量
+  try {
+    tray.setToolTip(`Android 14 虚拟机管理器 · ${runningCount}/${list.length} 台运行中`);
+  } catch {}
+
   return Menu.buildFromTemplate([
     { label: '显示主窗口', click: showWindow },
     { type: 'separator' },
     { label: `设备（${list.length}）`, submenu: items },
+    {
+      label: '排列窗口',
+      submenu: [
+        { label: '平铺', click: () => arrangeWindows('grid').catch(() => {}) },
+        { label: '横向', click: () => arrangeWindows('h').catch(() => {}) },
+        { label: '纵向', click: () => arrangeWindows('v').catch(() => {}) },
+        { label: '层叠', click: () => arrangeWindows('cascade').catch(() => {}) },
+      ],
+    },
     { type: 'separator' },
+    {
+      label: '检查更新',
+      click: () => {
+        showWindow();
+        try {
+          win.webContents.send('app:openUpdate');
+        } catch {}
+      },
+    },
     { label: '打开数据目录', click: () => shell.openPath(conf.vmRoot) },
     { label: '打开日志目录', click: () => shell.openPath(conf.logDir) },
     { type: 'separator' },
@@ -321,11 +346,8 @@ ipcMain.handle('sdk:check', wrap(async () => {
 
 ipcMain.handle('sdk:cancel', wrap(async () => { sdkCancel = true; return { ok: true }; }));
 
-// 可用镜像源
-ipcMain.handle('sdk:mirrors', wrap(async () => ({
-  mirrors: sdkdownloader.MIRRORS,
-  default: sdkdownloader.DEFAULT_MIRROR,
-})));
+// 可用镜像源（含自动择优探测结果）
+ipcMain.handle('sdk:mirrors', wrap(async () => sdkdownloader.listMirrorsWithSpeed()));
 
 // 未下完的分片（用于界面提示「可续传」）
 ipcMain.handle('sdk:pending', wrap(async () => sdkdownloader.pendingDownloads(conf.sdkRoot)));
@@ -358,7 +380,24 @@ ipcMain.handle('sdk:download', wrap(async (opts) => {
   return { started: true, sdkRoot, packages, mirror };
 }));
 
-// ---------- 摄像头 ----------
+// ---------- 摄像头实时跟随屏幕区域 ----------
+ipcMain.handle('camera:liveStart', wrap(async (opts) => {
+  const send = (frame) => {
+    try {
+      if (win && !win.isDestroyed()) win.webContents.send('camera:live', frame);
+    } catch {}
+  };
+  const r = await cameramod.startLive({
+    rect: opts && opts.rect,
+    intervalMs: opts && opts.intervalMs,
+    onFrame: send,
+  });
+  return r;
+}));
+
+ipcMain.handle('camera:liveStop', wrap(async () => cameramod.stopLive()));
+ipcMain.handle('camera:liveStatus', wrap(async () => cameramod.liveStatus()));
+
 ipcMain.handle('camera:hosts', wrap(async () => cameramod.listHostCameras()));
 ipcMain.handle('camera:status', wrap(async () => cameramod.getStatus()));
 ipcMain.handle('camera:set', wrap(async (src) => cameramod.setSource(src || {})));
@@ -378,6 +417,20 @@ ipcMain.handle('camera:pickImage', wrap(async () => {
   const ext = path.extname(src).toLowerCase() === '.png' ? 'png' : 'jpg';
   return cameramod.saveImage(`data:image/${ext};base64,${buf.toString('base64')}`, path.basename(src));
 }));
+
+// ---------- 应用更新 ----------
+const updater = require('./src/updater');
+
+updater.onStatus((s) => {
+  try {
+    if (win && !win.isDestroyed()) win.webContents.send('update:status', s);
+  } catch {}
+});
+
+ipcMain.handle('update:check', wrap(async () => updater.check()));
+ipcMain.handle('update:download', wrap(async () => updater.download()));
+ipcMain.handle('update:install', wrap(async () => updater.install()));
+ipcMain.handle('update:state', wrap(async () => updater.state()));
 
 // ---------- 多开实例 ----------
 ipcMain.handle('instances:list', wrap(async () => {
@@ -490,7 +543,10 @@ function arrangeScriptPath() {
   return null;
 }
 
-ipcMain.handle('windows:arrange', wrap(async (layout) => {
+ipcMain.handle('windows:arrange', wrap(async (layout) => arrangeWindows(layout)));
+
+/** 排列窗口（IPC 与托盘菜单共用） */
+async function arrangeWindows(layout) {
   const mode = ['grid', 'h', 'v', 'cascade'].includes(layout) ? layout : 'grid';
   const reg = instances.load();
 
@@ -532,7 +588,7 @@ ipcMain.handle('windows:arrange', wrap(async (layout) => {
         : '没有找到可排列的窗口 —— 这些设备是以「隐藏窗口」模式运行的，' +
           '到「设备设置 → 开发者选项」里关掉「后台运行」再启动才会出现原生窗口。',
   };
-}));
+}
 
 // 备份：把该实例的 userdata 镜像复制一份
 ipcMain.handle('instances:backup', wrap(async (id) => {

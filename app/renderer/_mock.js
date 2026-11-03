@@ -31,6 +31,13 @@
       }),
     onTaskProgress: () => () => {},
     windows: { arrange: () => ok({ ok: true, arranged: 2, running: 2 }) },
+    update: {
+      check: () => ok({ phase: 'available', message: '发现新版本 1.1.0', info: { version: '1.1.0', notes: '修复若干问题' }, packaged: true }),
+      download: () => ok({ phase: 'downloading', message: '下载中 0%' }),
+      install: () => ok({ ok: true }),
+      state: () => ok({ phase: 'idle', packaged: true }),
+      onStatus: () => () => {},
+    },
     config: { get: () => ok(cfg), save: (c) => ok(c) },
     vm: {
       start: () => ok({}), stop: () => ok({}), restart: () => ok({}),
@@ -94,6 +101,10 @@
       captureScreen: () => ok(null),
       crop: () => ok({ ok: true, name: 'region-x.png', path: 'c' }),
       pickImage: () => ok(null),
+      liveStart: () => ok({ ok: true, file: 'C:\\x\\live-region.png', intervalMs: 2000 }),
+      liveStop: () => ok({ ok: true }),
+      liveStatus: () => ok({ on: false }),
+      onLiveFrame: () => () => {},
     },
     sdk: {
       check: () => ok({ ready: SDK_READY }),

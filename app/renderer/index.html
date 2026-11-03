@@ -38,16 +38,25 @@
       <div class="rail-logo" title="AndroidVM"><span>▶</span></div>
       <button class="rail-btn active" data-view="launcher" title="设备列表">
         <svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-        <span>设备</span>
+        <span data-i18n="rail.devices">设备</span>
       </button>
       <button class="rail-btn" data-view="workspace" title="运行窗口">
         <svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><line x1="10" y1="18.5" x2="14" y2="18.5"/></svg>
-        <span>运行</span>
+        <span data-i18n="rail.run">运行</span>
       </button>
       <div class="rail-spacer"></div>
+      <button class="rail-btn" id="btnLang" title="语言 / Language">
+        <span id="langLabel" style="font-size:15px;font-weight:600;line-height:21px">中</span>
+        <span data-i18n="rail.lang">语言</span>
+      </button>
+      <button class="rail-btn" id="btnRailUpdate" title="检查更新">
+        <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 3.5V9h-5.5"/></svg>
+        <span data-i18n="rail.update">更新</span>
+        <i class="rail-badge" id="updateBadge" style="display:none"></i>
+      </button>
       <button class="rail-btn" id="btnRailSettings" title="设置">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></svg>
-        <span>设置</span>
+        <span data-i18n="rail.settings">设置</span>
       </button>
     </nav>
 
@@ -55,22 +64,22 @@
       <!-- ================= 启动器：设备网格 ================= -->
       <section class="view" id="viewLauncher">
         <header class="launcher-bar">
-          <button class="btn primary" id="btnNewDevice">＋ 新建设备</button>
-          <button class="btn" id="btnBatchOp">批量操作</button>
-          <button class="btn" id="btnArrange">排列窗口</button>
+          <button class="btn primary" id="btnNewDevice" data-i18n="launcher.new">＋ 新建设备</button>
+          <button class="btn" id="btnBatchOp" data-i18n="launcher.batch">批量操作</button>
+          <button class="btn" id="btnArrange" data-i18n="launcher.arrange">排列窗口</button>
           <div class="lb-spacer"></div>
           <div class="lb-search">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
-            <input id="devSearch" placeholder="搜索设备" />
+            <input id="devSearch" placeholder="搜索设备" data-i18n-ph="launcher.search" />
           </div>
-          <button class="icon-btn" id="btnSortMode" title="切换排序">
+          <button class="icon-btn" id="btnSortMode" title="切换排序" data-i18n-title="launcher.sort">
             <svg viewBox="0 0 24 24"><path d="M4 7h16M7 12h10M10 17h4"/></svg>
           </button>
           <div class="view-toggle">
-            <button class="vt-btn active" data-mode="grid" title="网格视图">
+            <button class="vt-btn active" data-mode="grid" title="网格视图" data-i18n-title="launcher.grid">
               <svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
             </button>
-            <button class="vt-btn" data-mode="list" title="列表视图">
+            <button class="vt-btn" data-mode="list" title="列表视图" data-i18n-title="launcher.list">
               <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
             </button>
           </div>
@@ -529,6 +538,19 @@
             <button class="btn small" id="btnCamPickFile">选择图片文件</button>
             <button class="btn small" id="btnCamRefreshImgs">刷新</button>
           </div>
+          <div class="row wrap">
+            <button class="btn small" id="btnCamLive">实时跟随屏幕区域</button>
+            <button class="btn small danger" id="btnCamLiveStop" style="display:none">停止跟随</button>
+          </div>
+          <div class="cam-live" id="camLiveBox" style="display:none">
+            <img id="camLivePreview" alt="实时画面预览" />
+            <div class="cam-live-meta" id="camLiveMeta">—</div>
+          </div>
+          <p class="hint" id="camLiveHint" style="display:none">
+            ⚠️ 模拟器的摄像头无法接收实时帧流（实测 <code>imagefile:</code> / <code>virtualscene</code>
+            在本机都会回退成模拟画面）。这里会定时抓取屏幕区域覆盖写入图片并实时预览；
+            若你的模拟器版本支持 <code>imagefile</code>，设备里看到的就是跟随画面。
+          </p>
           <div class="cam-imgs" id="camImgs"><p class="hint">还没有素材</p></div>
           <pre class="mono small" id="camOut">—</pre>
         </div>
@@ -595,32 +617,32 @@
 <div class="ctx-menu" id="ctxMenu" style="display:none">
   <button data-act="settings">
     <svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><circle cx="12" cy="9" r="2.2"/><path d="M8.5 16.5c.6-1.6 2-2.4 3.5-2.4s2.9.8 3.5 2.4"/></svg>
-    设备设置
+    <span data-i18n="ctx.settings">设备设置</span>
   </button>
   <button data-act="clean">
     <svg viewBox="0 0 24 24"><path d="M4 8h16M6.5 8l1 12h9l1-12"/><path d="M9.5 8V5h5v3"/></svg>
-    磁盘清理
+    <span data-i18n="ctx.clean">磁盘清理</span>
   </button>
   <button data-act="rename">
     <svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16z"/><path d="M14 6l4 4"/></svg>
-    重命名
+    <span data-i18n="ctx.rename">重命名</span>
   </button>
   <button data-act="clone">
     <svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
-    复制
+    <span data-i18n="ctx.clone">复制</span>
   </button>
   <button data-act="backup">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
-    备份与还原
+    <span data-i18n="ctx.backup">备份与还原</span>
   </button>
   <button data-act="shortcut">
     <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18"/><path d="M14 16l2.5-2.5M16.5 13.5h-3.5v3.5" stroke-linejoin="round"/></svg>
-    创建桌面快捷方式
+    <span data-i18n="ctx.shortcut">创建桌面快捷方式</span>
   </button>
   <div class="ctx-sep"></div>
   <button data-act="delete" class="danger">
     <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7"/><path d="M6.5 7l1 13h9l1-13"/></svg>
-    删除
+    <span data-i18n="ctx.delete">删除</span>
   </button>
 </div>
 
@@ -872,12 +894,12 @@
 <!-- ================= 通用输入对话框（重命名 / 新建） ================= -->
 <div class="mini-mask" id="inputDlg" style="display:none">
   <div class="mini">
-    <h3 id="inputTitle">重命名</h3>
+    <h3 id="inputTitle" data-i18n="dlg.renameTitle">重命名</h3>
     <p class="mini-desc" id="inputDesc"></p>
     <input type="text" id="inputField" class="mini-input" autocomplete="off" />
     <div class="mini-foot">
-      <button class="btn" id="inputCancel">取消</button>
-      <button class="btn primary" id="inputOk">确定</button>
+      <button class="btn" id="inputCancel" data-i18n="dlg.cancel">取消</button>
+      <button class="btn primary" id="inputOk" data-i18n="dlg.ok">确定</button>
     </div>
   </div>
 </div>
@@ -894,7 +916,7 @@
     <div class="mini-foot">
       <button class="btn small primary" id="backupCreate">＋ 创建新备份</button>
       <div class="mini-spacer"></div>
-      <button class="btn" id="backupClose">关闭</button>
+      <button class="btn" id="backupClose" data-i18n="dlg.close">关闭</button>
     </div>
   </div>
 </div>
@@ -902,7 +924,7 @@
 <!-- ================= 批量操作 ================= -->
 <div class="mini-mask" id="batchDlg" style="display:none">
   <div class="mini wide">
-    <h3>批量操作</h3>
+    <h3 data-i18n="dlg.batchTitle">批量操作</h3>
     <p class="mini-desc" id="batchDesc">勾选要操作的设备，再选择启动或停止。</p>
     <div class="batch-list" id="batchList"></div>
     <div class="mini-foot">
@@ -910,7 +932,7 @@
       <div class="mini-spacer"></div>
       <button class="btn small primary" id="batchStart">启动选中</button>
       <button class="btn small" id="batchStop">停止选中</button>
-      <button class="btn" id="batchCancel">取消</button>
+      <button class="btn" id="batchCancel" data-i18n="dlg.cancel">取消</button>
     </div>
   </div>
 </div>
@@ -918,7 +940,7 @@
 <!-- ================= 排列窗口 ================= -->
 <div class="mini-mask" id="arrangeDlg" style="display:none">
   <div class="mini">
-    <h3>排列窗口</h3>
+    <h3 data-i18n="dlg.arrangeTitle">排列窗口</h3>
     <p class="mini-desc">
       把正在运行的模拟器原生窗口在桌面上排好。<br />
       <span class="mini-warn">只对「显示模拟器窗口」模式运行的设备有效</span>——
@@ -933,11 +955,27 @@
     <div class="mini-foot">
       <span class="mini-desc" id="arrangeHint" style="margin:0"></span>
       <div class="mini-spacer"></div>
-      <button class="btn" id="arrangeClose">关闭</button>
+      <button class="btn" id="arrangeClose" data-i18n="dlg.close">关闭</button>
     </div>
   </div>
 </div>
 
+<!-- ================= 检查更新 ================= -->
+<div class="mini-mask" id="updateDlg" style="display:none">
+  <div class="mini">
+    <h3 data-i18n="dlg.updateTitle">检查更新</h3>
+    <p class="mini-desc" id="updateMsg">—</p>
+    <div class="sdk-bar" id="updateBarWrap" style="display:none;margin-bottom:12px"><i id="updateBar"></i></div>
+    <pre class="mini-notes" id="updateNotes" style="display:none"></pre>
+    <div class="mini-foot">
+      <button class="btn small primary" id="updateAction" style="display:none">下载</button>
+      <div class="mini-spacer"></div>
+      <button class="btn" id="updateClose" data-i18n="dlg.close">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script src="i18n.js"></script>
 <script src="renderer.js"></script>
 </body>
 </html>
