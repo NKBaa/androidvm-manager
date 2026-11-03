@@ -2,6 +2,13 @@
 
 基于 Android Emulator 的图形化管理器：**多开实例**、**真机档案伪装**、**网络/号码/短信模拟**、**Root**，界面按市面模拟器（BlueStacks / MuMu / LDPlayer）的布局重做。
 
+[![Release](https://img.shields.io/github/v/release/NKBaa/androidvm-manager?label=下载&color=4c7dff)](https://github.com/NKBaa/androidvm-manager/releases/latest)
+[![Build](https://github.com/NKBaa/androidvm-manager/actions/workflows/build.yml/badge.svg)](https://github.com/NKBaa/androidvm-manager/actions/workflows/build.yml)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+**下载**：[AndroidVM-Setup-1.0.0.exe](https://github.com/NKBaa/androidvm-manager/releases/latest)（安装版）
+· [AndroidVM-Portable-1.0.0.exe](https://github.com/NKBaa/androidvm-manager/releases/latest)（便携版）
+
 ![主界面](_docs/ui-device.png)
 
 ---
