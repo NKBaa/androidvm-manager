@@ -1,0 +1,18 @@
+{
+  "_note": "Pixel 9 Pro XL（代号 komodo）。brand/model/device/name 来自 Google Play 官方设备清单（_data/supported_devices.csv），100% 真实。release/sdk 留空表示沿用镜像当前值——因为真实构建号(buildId/incremental/securityPatch)不在官方清单里，硬填会造成『自称 Android 16 却报 Android 14 构建号』的自相矛盾。如需完整指纹，请在 buildId/incremental/securityPatch 填入该机型真实构建信息。",
+  "brand": "google",
+  "device": "komodo",
+  "model": "Pixel 9 Pro XL",
+  "name": "komodo",
+  "product": "komodo",
+  "manufacturer": "Google",
+  "marketing": "Pixel 9 Pro XL",
+  "buildId": "",
+  "incremental": "",
+  "release": "",
+  "sdk": "",
+  "type": "user",
+  "tags": "release-keys",
+  "securityPatch": "",
+  "firstApiLevel": "34"
+}

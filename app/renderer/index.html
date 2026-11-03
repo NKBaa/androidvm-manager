@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>Android 14 虚拟机管理器</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+  <!-- 首次运行 / SDK 缺失提示 -->
+  <div class="sdk-banner" id="sdkBanner" style="display:none">
+    <span class="sdk-ico">⚠</span>
+    <span class="sdk-msg" id="sdkMsg">未找到 Android SDK</span>
+    <button class="btn small primary" id="btnPickSdk">选择 SDK 目录</button>
+  </div>
+
+  <!-- ================= 顶栏 ================= -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">▶</span>
+      <div class="brand-text">
+        <h1>Android 14 虚拟机管理器</h1>
+        <p class="sub">谷歌服务 · 真机档案 · 网络模拟 · 号码短信</p>
+      </div>
+    </div>
+
+    <div class="status-cluster">
+      <span id="statusDot" class="dot off"></span>
+      <span id="statusText">未启动</span>
+    </div>
+
+    <div class="actions">
+      <button id="btnStart" class="btn primary">启动</button>
+      <button id="btnStop" class="btn">停止</button>
+      <button id="btnRestart" class="btn">重启</button>
+    </div>
+  </header>
+
+  <!-- ================= 工作区 ================= -->
+  <div class="workspace">
+    <!-- 左侧：实例列表 + 图标导航 -->
+    <nav class="sidebar">
+      <div class="sb-section">
+        <div class="sb-head">
+          <span>实例</span>
+          <button class="icon-btn" id="btnInstNew" title="新建实例">＋</button>
+        </div>
+        <div class="inst-list" id="instList">
+          <div class="inst-empty">加载中…</div>
+        </div>
+      </div>
+
+      <div class="sb-nav">
+        <button class="tab active" data-tab="device" title="设备总览">
+          <svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><line x1="10" y1="18.5" x2="14" y2="18.5"/></svg>
+          <span>设备</span>
+        </button>
+        <button class="tab" data-tab="network" title="网络场景">
+          <svg viewBox="0 0 24 24"><path d="M3 17h2v-4H3zM8 17h2V9H8zM13 17h2V5h-2zM18 17h2v-7h-2z"/></svg>
+          <span>网络</span>
+        </button>
+        <button class="tab" data-tab="wireless" title="WiFi / 蓝牙">
+          <svg viewBox="0 0 24 24"><path d="M2 8.5a16 16 0 0 1 20 0"/><path d="M5.5 12.5a11 11 0 0 1 13 0"/><path d="M9 16.5a6 6 0 0 1 6 0"/><circle cx="12" cy="20" r="1"/></svg>
+          <span>无线</span>
+        </button>
+        <button class="tab" data-tab="proxy" title="代理设置">
+          <svg viewBox="0 0 24 24"><path d="M12 2.5 4 6v6c0 5 3.4 8.4 8 9.5 4.6-1.1 8-4.5 8-9.5V6z"/></svg>
+          <span>代理</span>
+        </button>
+        <button class="tab" data-tab="phone" title="电话 / 短信">
+          <svg viewBox="0 0 24 24"><path d="M5 3h4l2 5-3 2a13 13 0 0 0 6 6l2-3 5 2v4a2 2 0 0 1-2 2A17 17 0 0 1 3 5a2 2 0 0 1 2-2z"/></svg>
+          <span>电话</span>
+        </button>
+        <button class="tab" data-tab="hardware" title="硬件设置">
+          <svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg>
+          <span>硬件</span>
+        </button>
+        <button class="tab" data-tab="shell" title="Shell / 日志">
+          <svg viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="16" rx="2.5"/><path d="M7 9.5 10 12l-3 2.5M12.5 15h4"/></svg>
+          <span>终端</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- 中间：设备预览 + 悬浮侧边工具栏 -->
+    <section class="stage">
+      <div class="stage-inner">
+        <div class="phone" id="phoneFrame">
+          <div class="phone-cam"></div>
+          <div class="phone-screen" id="screenWrap">
+            <img id="screen" alt="虚拟机屏幕" />
+            <div class="screen-hint" id="screenHint">
+              <div class="hint-play">▶</div>
+              <p>虚拟机未启动</p>
+              <small>启动后点击右侧「截屏」查看画面</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="side-tool" id="sideTool">
+          <button class="st-btn" id="btnShot" title="截屏">
+            <svg viewBox="0 0 24 24"><path d="M3 8h3l1.5-2h9L18 8h3v11H3z"/><circle cx="12" cy="13" r="3.2"/></svg>
+          </button>
+          <button class="st-btn" id="btnQuickApk" title="安装 APK">
+            <svg viewBox="0 0 24 24"><path d="M12 3v10M8.5 9.5 12 13l3.5-3.5"/><path d="M4 15v3.5A2.5 2.5 0 0 0 6.5 21h11A2.5 2.5 0 0 0 20 18.5V15"/></svg>
+          </button>
+          <span class="st-sep"></span>
+          <button class="st-btn" id="btnNavBack" title="返回键">
+            <svg viewBox="0 0 24 24"><path d="M15 5 8 12l7 7"/></svg>
+          </button>
+          <button class="st-btn" id="btnNavHome" title="主页键">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5"/></svg>
+          </button>
+          <button class="st-btn" id="btnNavRecents" title="最近任务">
+            <svg viewBox="0 0 24 24"><rect x="4" y="4" width="10" height="10" rx="2"/><path d="M10 20h8a2 2 0 0 0 2-2v-8"/></svg>
+          </button>
+          <span class="st-sep"></span>
+          <button class="st-btn" id="btnVolUp" title="音量 +">
+            <svg viewBox="0 0 24 24"><path d="M4 9.5h3L12 5v14l-5-4.5H4z"/><path d="M16 9.5v5M13.5 12h5"/></svg>
+          </button>
+          <button class="st-btn" id="btnVolDown" title="音量 −">
+            <svg viewBox="0 0 24 24"><path d="M4 9.5h3L12 5v14l-5-4.5H4z"/><path d="M13.5 12h5"/></svg>
+          </button>
+          <button class="st-btn" id="btnRotate" title="旋转屏幕">
+            <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8"/><path d="M20 3v4.5h-4.5"/></svg>
+          </button>
+          <button class="st-btn" id="btnPower" title="电源键">
+            <svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.5 6.5a8 8 0 1 0 11 0"/></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 右侧：设置面板 -->
+    <aside class="sidepanel">
+      <!-- ============ 设备总览 ============ -->
+      <div class="panel active" id="panel-device">
+        <div class="card">
+          <h2>虚拟机状态 <button class="btn small" id="btnRefreshInfo">刷新</button></h2>
+          <dl class="kv" id="vmInfo"></dl>
+        </div>
+        <div class="card">
+          <h2>启动配置</h2>
+          <label>机型 <select id="cfgDevice"></select></label>
+          <div class="grid2 tight">
+            <label>内存 (MB)
+              <select id="cfgRam">
+                <option>2048</option><option>3072</option><option selected>4096</option><option>6144</option><option>8192</option>
+              </select>
+            </label>
+            <label>CPU 核心
+              <select id="cfgCores"><option>2</option><option>3</option><option selected>4</option><option>6</option><option>8</option></select>
+            </label>
+            <label>数据分区 (GB)
+              <select id="cfgDisk"><option>4</option><option selected>6</option><option>8</option><option>12</option><option>16</option><option>32</option></select>
+            </label>
+          </div>
+          <label class="check"><input type="checkbox" id="cfgRoot" checked /> 启用 Root 权限</label>
+          <label class="check"><input type="checkbox" id="cfgWritable" checked /> 系统分区可写</label>
+          <label class="check"><input type="checkbox" id="cfgHostAudio" checked /> 声音输出到主机</label>
+          <label class="check"><input type="checkbox" id="cfgSnapshot" /> 使用快照快速启动</label>
+          <button class="btn small primary" id="btnSaveConfig">保存配置</button>
+          <p class="hint">修改内存 / 磁盘 / 机型需要重启虚拟机后生效。</p>
+        </div>
+      </div>
+
+      <!-- ============ 网络 ============ -->
+      <div class="panel" id="panel-network">
+        <div class="card">
+          <h2>网络场景</h2>
+          <div class="preset-grid" id="netPresets"></div>
+          <div class="row wrap">
+            <button class="btn danger small" id="btnOffline">断开网络</button>
+            <button class="btn small" id="btnOnline">恢复网络</button>
+            <button class="btn small" id="btnNetStatus">查看状态</button>
+            <button class="btn small" id="btnNetTest">连通性测试</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>自定义参数</h2>
+          <div class="grid2 tight">
+            <label>下行 (Kbps，0=预设) <input type="number" id="netDown" value="0" min="0" step="64" /></label>
+            <label>上行 (Kbps，0=预设) <input type="number" id="netUp" value="0" min="0" step="64" /></label>
+            <label>附加延迟 (ms) <input type="number" id="netLatency" value="0" min="0" step="10" /></label>
+            <label>丢包率 (%) <input type="number" id="netLoss" value="0" min="0" max="100" step="1" /></label>
+          </div>
+          <label>网络制式
+            <select id="netRadio">
+              <option>GSM</option><option>EDGE</option><option>UMTS</option><option>HSDPA</option>
+              <option selected>LTE</option><option>5G</option>
+            </select>
+          </label>
+          <button class="btn small primary" id="btnNetApply">应用自定义</button>
+        </div>
+        <div class="card">
+          <h2>当前网络状态</h2>
+          <pre class="mono small" id="netStatusOut">尚未查询</pre>
+        </div>
+      </div>
+
+      <!-- ============ WiFi / 蓝牙 / 移动网络 ============ -->
+      <div class="panel" id="panel-wireless">
+        <div class="card">
+          <h2>WiFi</h2>
+          <div class="row wrap">
+            <button class="btn small primary" id="btnWifiOn">开启</button>
+            <button class="btn small" id="btnWifiOff">关闭</button>
+            <button class="btn small" id="btnWifiStatus">读取状态</button>
+          </div>
+          <label>SSID <input type="text" id="wifiSsid" value="AndroidWifi" /></label>
+          <div class="grid2 tight">
+            <label>加密
+              <select id="wifiSec">
+                <option value="open">open</option>
+                <option value="wpa2">wpa2</option>
+                <option value="wpa3">wpa3</option>
+                <option value="owe">owe</option>
+                <option value="wep">wep</option>
+              </select>
+            </label>
+            <label>密码 <input type="text" id="wifiPass" placeholder="可空" /></label>
+          </div>
+          <div class="row wrap">
+            <button class="btn small primary" id="btnWifiConnect">连接</button>
+            <button class="btn small" id="btnWifiAdd">保存网络</button>
+            <button class="btn small" id="btnWifiList">已保存</button>
+            <button class="btn small" id="btnWifiScan">扫描</button>
+          </div>
+          <p class="hint">内置虚拟 AP <code>AndroidWifi</code>，关闭再开启即自动连上。</p>
+          <pre class="mono small" id="wifiOut">—</pre>
+        </div>
+
+        <div class="card">
+          <h2>蓝牙</h2>
+          <div class="row wrap">
+            <button class="btn small primary" id="btnBtOn">开启</button>
+            <button class="btn small" id="btnBtOff">关闭</button>
+            <button class="btn small" id="btnBtStatus">读取状态</button>
+            <button class="btn small" id="btnBtPaired">配对设备</button>
+          </div>
+          <label>适配器名称 <input type="text" id="btName" placeholder="例如 Galaxy S23 Ultra" /></label>
+          <button class="btn small" id="btnBtName">设置名称</button>
+          <p class="hint">⚠️ 本机 netsimd 无法启动，蓝牙底层不可用，开启会被拦截。</p>
+          <pre class="mono small" id="btOut">—</pre>
+        </div>
+
+        <div class="card">
+          <h2>移动网络</h2>
+          <div class="grid2 tight">
+            <label>信号强度
+              <select id="cellSignal"><option>0</option><option>1</option><option>2</option><option>3</option><option selected>4</option></select>
+            </label>
+            <label>网络制式
+              <select id="cellType">
+                <option>GSM</option><option>EDGE</option><option>UMTS</option>
+                <option>HSDPA</option><option>HSPA</option><option selected>LTE</option><option>5G</option>
+              </select>
+            </label>
+            <label>数据连接
+              <select id="cellData">
+                <option value="home">home（已注册）</option>
+                <option value="roaming">roaming（漫游）</option>
+                <option value="searching">searching（搜网）</option>
+                <option value="unregistered">unregistered（未注册）</option>
+                <option value="denied">denied（被拒）</option>
+                <option value="off">off（关闭）</option>
+              </select>
+            </label>
+            <label>语音注册
+              <select id="cellVoice">
+                <option value="home">home</option>
+                <option value="roaming">roaming</option>
+                <option value="off">off</option>
+              </select>
+            </label>
+          </div>
+          <label>运营商名称 <input type="text" id="cellOperator" value="T-Mobile" /></label>
+          <label class="check"><input type="checkbox" id="cellRoaming" /> 漫游状态</label>
+          <div class="row wrap">
+            <button class="btn small primary" id="btnCellApply">应用</button>
+            <button class="btn small" id="btnCellStatus">读取状态</button>
+          </div>
+          <pre class="mono small" id="cellOut">—</pre>
+        </div>
+      </div>
+
+      <!-- ============ 代理 ============ -->
+      <div class="panel" id="panel-proxy">
+        <div class="card">
+          <h2>代理设置</h2>
+          <label class="check"><input type="checkbox" id="pxEnabled" /> 启用代理</label>
+          <label>类型
+            <select id="pxType">
+              <option value="http">HTTP</option>
+              <option value="https">HTTPS</option>
+              <option value="socks5">SOCKS5</option>
+            </select>
+          </label>
+          <label>主机 <input type="text" id="pxHost" placeholder="127.0.0.1（自动映射为 10.0.2.2）" /></label>
+          <div class="grid2 tight">
+            <label>端口 <input type="number" id="pxPort" value="8080" /></label>
+            <label>用户名 <input type="text" id="pxUser" /></label>
+          </div>
+          <label>密码 <input type="password" id="pxPass" /></label>
+          <label class="check"><input type="checkbox" id="pxSystem" checked /> 同时写入系统全局代理</label>
+          <div class="row wrap">
+            <button class="btn primary small" id="btnProxyApply">应用代理</button>
+            <button class="btn small" id="btnProxyClear">清除</button>
+            <button class="btn small" id="btnProxyStatus">查看当前</button>
+          </div>
+          <p class="hint">宿主机 127.0.0.1 在虚拟机内对应 <code>10.0.2.2</code>。</p>
+        </div>
+        <div class="card"><h2>代理状态</h2><pre class="mono small" id="proxyOut">尚未查询</pre></div>
+      </div>
+
+      <!-- ============ 电话 ============ -->
+      <div class="panel" id="panel-phone">
+        <div class="card">
+          <h2>电话号码</h2>
+          <label>本机号码 <input type="text" id="phNumber" placeholder="+1 555 521 0001" /></label>
+          <div class="grid2 tight">
+            <label>运营商 <input type="text" id="phOperator" value="T-Mobile" /></label>
+            <label>国家代码 <input type="text" id="phCountry" value="us" /></label>
+          </div>
+          <label>ICCID（可选） <input type="text" id="phIccid" placeholder="8944500000000000001" /></label>
+          <div class="row">
+            <button class="btn primary small" id="btnPhoneApply">应用号码</button>
+            <button class="btn small" id="btnPhoneStatus">读取当前</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>信号 / 数据</h2>
+          <label>信号强度（0 = 无信号） <input type="range" id="phSignal" min="0" max="4" value="4" /></label>
+          <div class="row wrap">
+            <button class="btn small" id="btnSig4">满格</button>
+            <button class="btn small" id="btnSig0">无信号</button>
+            <button class="btn small" id="btnDataHome">蜂窝上网</button>
+            <button class="btn small" id="btnDataRoam">漫游</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>模拟来电</h2>
+          <label>来电号码 <input type="text" id="callNumber" value="+8613800138000" /></label>
+          <div class="row wrap">
+            <button class="btn small primary" id="btnCallIn">拨打进来</button>
+            <button class="btn small" id="btnCallAccept">接听</button>
+            <button class="btn small" id="btnCallHang">挂断</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>模拟收到短信</h2>
+          <label>发送方号码 <input type="text" id="smsFrom" value="+8613800138000" /></label>
+          <label>短信内容 <textarea id="smsText" rows="3">【测试】这是一条模拟短信，验证码 123456</textarea></label>
+          <div class="row">
+            <button class="btn primary small" id="btnSmsSend">注入短信</button>
+            <button class="btn small" id="btnSmsList">查看短信</button>
+          </div>
+        </div>
+
+        <div class="card"><h2>输出</h2><pre class="mono small" id="phoneOut">—</pre></div>
+      </div>
+
+      <!-- ============ 硬件 ============ -->
+      <div class="panel" id="panel-hardware">
+        <div class="card">
+          <h2>Root 权限</h2>
+          <label class="switch-row">
+            <input type="checkbox" id="hwRoot" />
+            <span>启用 Root（userdebug 镜像支持即时切换）</span>
+          </label>
+          <div class="row">
+            <button class="btn small" id="btnRootApply">应用</button>
+            <button class="btn small" id="btnRootStatus">检查状态</button>
+          </div>
+          <pre class="mono small" id="rootOut">—</pre>
+        </div>
+
+        <div class="card">
+          <h2>机型模拟</h2>
+          <label>选择机型 <select id="hwDevice"></select></label>
+          <div class="row">
+            <button class="btn small primary" id="btnDeviceApply">应用机型</button>
+            <button class="btn small" id="btnDeviceInfo">读取设备信息</button>
+          </div>
+          <pre class="mono small" id="devOut">—</pre>
+        </div>
+
+        <div class="card">
+          <h2>真机档案（全套设备身份）</h2>
+          <p class="hint">
+            从 Google Play 官方真机库（5.4 万台）选择一台真机，写入
+            <code>brand / device / model / name / manufacturer</code> 与 <code>ro.build.*</code>。
+            需要 userdebug 镜像 + 可写系统分区。
+          </p>
+          <div class="row wrap">
+            <input type="text" id="profSearch" placeholder="Pixel 9 Pro XL / SM-S918B / dm3q" />
+            <button class="btn small" id="btnProfSearch">搜索</button>
+          </div>
+          <div class="row wrap">
+            <button class="btn small" id="btnProfList">已保存档案</button>
+            <button class="btn small" id="btnProfIdentity">当前身份</button>
+            <button class="btn small" id="btnProfRevert">还原</button>
+          </div>
+          <label>应用目标 <input type="text" id="profApplyName" placeholder="档案名或真机型号" /></label>
+          <button class="btn small primary" id="btnProfApply">应用并重启</button>
+          <pre class="mono small" id="profOut">—</pre>
+        </div>
+
+        <div class="card">
+          <h2>显示</h2>
+          <div class="grid3 tight">
+            <label>宽 <input type="number" id="dispW" value="1080" /></label>
+            <label>高 <input type="number" id="dispH" value="2400" /></label>
+            <label>DPI <input type="number" id="dispD" value="420" /></label>
+          </div>
+          <div class="row wrap">
+            <button class="btn small primary" id="btnDispApply">应用</button>
+            <button class="btn small" id="btnDispReset">还原</button>
+            <button class="btn small" id="btnDispStatus">查看</button>
+          </div>
+          <pre class="mono small" id="dispOut">—</pre>
+        </div>
+
+        <div class="card">
+          <h2>声音 / 扬声器</h2>
+          <label>媒体音量 <input type="range" id="volMusic" min="0" max="15" value="10" /></label>
+          <label>铃声音量 <input type="range" id="volRing" min="0" max="7" value="5" /></label>
+          <label>通话音量 <input type="range" id="volCall" min="0" max="7" value="4" /></label>
+          <div class="row wrap">
+            <button class="btn small primary" id="btnVolApply">应用</button>
+            <button class="btn small" id="btnMute">静音</button>
+            <button class="btn small" id="btnUnmute">取消静音</button>
+            <button class="btn small" id="btnAudio">音频状态</button>
+          </div>
+          <pre class="mono small" id="audioOut">—</pre>
+        </div>
+
+        <div class="card">
+          <h2>摄像头</h2>
+          <label>后置摄像头
+            <select id="camBack">
+              <option value="virtualscene">虚拟场景（默认）</option>
+              <option value="emulated">模拟画面</option>
+              <option value="webcam0">宿主机摄像头 0</option>
+              <option value="none">无</option>
+            </select>
+          </label>
+          <label>前置摄像头
+            <select id="camFront">
+              <option value="emulated">模拟画面（默认）</option>
+              <option value="virtualscene">虚拟场景</option>
+              <option value="webcam0">宿主机摄像头 0</option>
+              <option value="none">无</option>
+            </select>
+          </label>
+          <div class="row">
+            <button class="btn small primary" id="btnCamApply">应用</button>
+            <button class="btn small" id="btnCamStatus">读取</button>
+          </div>
+          <p class="hint">切换摄像头需要重启虚拟机。</p>
+          <pre class="mono small" id="camOut">—</pre>
+        </div>
+
+        <div class="card">
+          <h2>磁盘</h2>
+          <div class="row wrap">
+            <button class="btn small" id="btnDisk">查看分区</button>
+            <button class="btn small" id="btnSdcard">查看 SD 卡</button>
+          </div>
+          <pre class="mono small" id="diskOut">—</pre>
+        </div>
+      </div>
+
+      <!-- ============ Shell ============ -->
+      <div class="panel" id="panel-shell">
+        <div class="card">
+          <h2>命令执行</h2>
+          <input type="text" id="shellCmd" placeholder="例如 getprop ro.product.model" />
+          <label class="check"><input type="checkbox" id="shellRoot" /> 以 root 执行</label>
+          <button class="btn primary small" id="btnShellRun">执行</button>
+          <pre class="mono" id="shellOut">—</pre>
+        </div>
+        <div class="card">
+          <h2>模拟器日志
+            <button class="btn small" id="btnLogRefresh">刷新</button>
+            <button class="btn small" id="btnLogDir">打开目录</button>
+          </h2>
+          <pre class="mono log" id="logOut">—</pre>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ================= 底部状态栏 ================= -->
+  <footer class="statusbar">
+    <span class="sb-item"><i class="sb-dot" id="sbDot"></i><span id="sbState">未启动</span></span>
+    <span class="sb-item" id="sbDevice">—</span>
+    <span class="sb-item" id="sbAndroid">—</span>
+    <span class="sb-item" id="sbRoot">—</span>
+    <span class="sb-toast" id="toast"></span>
+  </footer>
+</div>
+<script src="renderer.js"></script>
+</body>
+</html>

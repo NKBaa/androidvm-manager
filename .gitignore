@@ -1,0 +1,33 @@
+# ---- Android SDK / 虚拟机数据（体积巨大，不入库）----
+android-sdk/
+avd/
+home/
+
+# ---- 运行时产物 ----
+_logs/
+dist/
+_cache/
+app/logs/
+app/state.json
+
+# ---- 运行时状态（每台机器不同）----
+_data/instances.json
+_data/instances/
+_data/active-profile.json
+_data/settings.json
+
+# ---- 依赖 ----
+node_modules/
+app/node_modules/
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# ---- 临时 ----
+*.tmp
+*.log

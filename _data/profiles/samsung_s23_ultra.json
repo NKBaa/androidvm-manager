@@ -1,0 +1,18 @@
+{
+  "_note": "Samsung Galaxy S23 Ultra 欧版 SM-S918B（代号 dm3q）。brand/model/device/name 来自 Google Play 官方设备清单，100% 真实。release/sdk 留空表示沿用镜像值；真实三星构建号需自行填入 buildId/incremental/securityPatch 才能得到完整一致的指纹。",
+  "brand": "samsung",
+  "device": "dm3q",
+  "model": "SM-S918B",
+  "name": "dm3q",
+  "product": "dm3q",
+  "manufacturer": "samsung",
+  "marketing": "Galaxy S23 Ultra",
+  "buildId": "",
+  "incremental": "",
+  "release": "",
+  "sdk": "",
+  "type": "user",
+  "tags": "release-keys",
+  "securityPatch": "",
+  "firstApiLevel": "33"
+}

@@ -1,0 +1,47 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: 安装依赖
+        working-directory: app
+        run: npm ci
+
+      - name: 打包
+        working-directory: app
+        run: npx electron-builder --win --publish never
+        env:
+          # 未配置代码签名证书，跳过签名
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: androidvm-windows
+          path: |
+            dist/*.exe
+            dist/*.blockmap
+          if-no-files-found: error
+
+      - name: 发布 Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.exe
+          generate_release_notes: true

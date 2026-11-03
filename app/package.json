@@ -1,0 +1,97 @@
+{
+  "name": "androidvm-manager",
+  "productName": "AndroidVM",
+  "version": "1.0.0",
+  "description": "Android 14 虚拟机管理器（谷歌服务 + 网络/电话/代理/root 自定义）",
+  "main": "main.js",
+  "author": "local",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "dist": "electron-builder --win",
+    "dist:dir": "electron-builder --win --dir"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "local.androidvm.manager",
+    "productName": "AndroidVM",
+    "copyright": "Android 14 虚拟机管理器",
+    "afterPack": "build/afterPack.js",
+    "directories": {
+      "output": "../dist",
+      "buildResources": "build"
+    },
+    "asar": true,
+    "asarUnpack": [
+      "src/**"
+    ],
+    "electronDist": "node_modules/electron/dist",
+    "electronVersion": "31.7.7",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "src/**/*",
+      "!renderer/_preview.html",
+      "!renderer/_mock.js",
+      "!renderer/_preview.js",
+      "!renderer/_shot.png",
+      "!**/*.log"
+    ],
+    "extraResources": [
+      {
+        "from": "../_data/supported_devices.csv",
+        "to": "seed/_data/supported_devices.csv"
+      },
+      {
+        "from": "../_data/profiles",
+        "to": "seed/_data/profiles"
+      },
+      {
+        "from": "../_docs",
+        "to": "docs"
+      },
+      {
+        "from": "../使用说明.md",
+        "to": "docs/使用说明.md"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false,
+      "artifactName": "AndroidVM-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Android 14 虚拟机管理器",
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "AndroidVM-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "AndroidVM-Portable-${version}.${ext}"
+    }
+  }
+}

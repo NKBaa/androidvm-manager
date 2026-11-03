@@ -1,0 +1,88 @@
+// 预览用 mock：给 renderer.js 提供 window.api，并填充真实感数据
+(() => {
+  const ok = (data) => Promise.resolve({ ok: true, data });
+  const cfg = {
+    deviceKey: 'pixel_7', ram: 4096, cores: 4, diskGB: 6,
+    root: true, writableSystem: true, snapshot: false,
+    audio: { host: true },
+    resolution: { width: 1080, height: 2400, density: 420 },
+    proxy: { enabled: false, type: 'http', host: '', port: 8080, system: true },
+    network: { profile: 'wifi', downloadKbps: 0, uploadKbps: 0, latencyMs: 0, packetLoss: 0, radioType: 'LTE' },
+    phone: { number: '+15555210001', operator: '中国移动', iccid: '8944500000000000001', country: 'us' },
+    camera: { back: 'virtualscene', front: 'emulated' },
+  };
+  const status = {
+    running: true, online: true, booting: false, booted: true, postBootDone: true,
+    id: 'main', name: '主实例', avdName: 'A14_Root',
+    pid: 46512, serial: 'emulator-5554', consolePort: 5554, uptime: 3672,
+    props: { release: '14', sdk: '34', model: 'SM-S918B', brand: 'samsung', root: true },
+  };
+  window.api = {
+    info: () => ok({ version: '1.0.0' }),
+    config: { get: () => ok(cfg), save: (c) => ok(c) },
+    vm: {
+      start: () => ok({}), stop: () => ok({}), restart: () => ok({}),
+      status: () => ok(status), log: () => ok('INFO | Boot completed'),
+      devices: () => ok([]), openLogDir: () => ok(true),
+    },
+    instances: {
+      list: () => ok({
+        activeId: 'main',
+        list: [
+          { id: 'main', name: '主实例', avdName: 'A14_Root', port: 5554, serial: 'emulator-5554', active: true, online: true, listening: true },
+          { id: 'work', name: '工作机', avdName: 'A14_Root_2', port: 5556, serial: 'emulator-5556', active: false, online: true, listening: true },
+          { id: 'test', name: '测试实例', avdName: 'A14_Root_3', port: 5558, serial: 'emulator-5558', active: false, online: false, listening: false },
+        ],
+      }),
+      create: () => ok({ id: 'x', name: '新实例', avdName: 'A14_Root_4', port: 5560 }),
+      remove: () => ok({}), rename: () => ok({}),
+      setActive: (id) => ok({ id, name: id === 'work' ? '工作机' : '主实例' }),
+      active: () => ok({ id: 'main', name: '主实例' }),
+    },
+    net: {
+      apply: () => ok({ speed: 'OK' }), status: () => ok({ console: 'full speed', networkType: 'LTE' }),
+      test: () => ok({ ping: '3/3 received', dns: 'ok' }), offline: () => ok('OK'),
+    },
+    proxy: { apply: () => ok({}), status: () => ok({ enabled: false }) },
+    phone: {
+      set: () => ok({ ok: true }), status: () => ok({ number: '+15555210001', operator: '中国移动' }),
+      call: () => ok({ ok: true }), signal: () => ok({ ok: true }), data: () => ok({ ok: true }),
+      sms: () => ok({ ok: true }), listSms: () => ok([]),
+    },
+    dev: {
+      root: () => ok({}), rootStatus: () => ok({ root: true }), disk: () => ok({ raw: '/data 6G' }),
+      sdcard: () => ok('ok'), display: () => ok({}), displayStatus: () => ok({}), displayReset: () => ok({}),
+      screenshot: () => ok('_shot.png'),
+      volume: () => ok({}), audio: () => ok({}), speaker: () => ok({}),
+      camera: () => ok({}), cameraStatus: () => ok({ back: 'virtualscene', front: 'emulated' }),
+      setDevice: () => ok({ resolution: cfg.resolution }), info: () => ok({ model: 'SM-S918B' }),
+      shell: () => ok('ok'), rootShell: () => ok('ok'), console: () => ok('OK'),
+      key: () => ok({}), rotate: () => ok({}),
+    },
+    ui: { pickApk: () => ok(null), installApk: () => ok('Success') },
+    profile: {
+      db: () => ok({ devices: 54328, brands: 3879 }), search: () => ok([]),
+      list: () => ok([{ file: 'samsung_s23_ultra_arm.json', brand: 'samsung', device: 'dm3q', model: 'SM-S918B' }]),
+      identity: () => ok({ brand: 'samsung', device: 'dm3q', model: 'SM-S918B' }),
+      active: () => ok({ model: 'SM-S918B' }), canSpoof: () => ok({ ok: true }),
+      apply: () => ok({ ok: true }), revert: () => ok({ ok: true }),
+    },
+    engine: { set: () => ok({}), current: () => ok('google_apis') },
+    wifi: {
+      enable: () => ok({ ok: true }), connect: () => ok({ ok: true }), add: () => ok({ ok: true }),
+      list: () => ok([{ id: 0, ssid: 'AndroidWifi', security: 'open' }]),
+      forget: () => ok({ ok: true }), scan: () => ok([]),
+      status: () => ok({ enabled: true, connected: true, ssid: 'AndroidWifi', bssid: '00:13:10:85:fe:01', mac: '02:15:b2:00:00:00', rssi: '-50', supplicantState: 'COMPLETED' }),
+    },
+    bt: {
+      enable: () => ok({ ok: false, blocked: true }), name: () => ok({ ok: true }),
+      paired: () => ok([]), status: () => ok({ state: 'OFF', enabled: false, note: 'netsimd 不可用' }),
+    },
+    cell: {
+      signal: () => ok({ ok: true }), rssi: () => ok({ ok: true }), data: () => ok({ ok: true }),
+      voice: () => ok({ ok: true }), meter: () => ok({ ok: true }), operator: () => ok({ ok: true }),
+      nettype: () => ok({ ok: true }), roaming: () => ok({ ok: true }),
+      status: () => ok({ operator: '中国移动', networkType: 'LTE', signalLevel: '4', simState: 'LOADED', roaming: false, subscriptions: [{}, {}] }),
+    },
+  };
+})();

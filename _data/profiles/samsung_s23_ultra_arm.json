@@ -1,0 +1,25 @@
+{
+  "_note": "Samsung Galaxy S23 Ultra 欧版 SM-S918B（代号 dm3q，主板 kalama = 骁龙 8 Gen 2）。brand/model/device/name 来自 Google Play 官方设备清单，100% 真实。cpu 段只调整 abilist 顺序让 SUPPORTED_ABIS[0] 变 arm64-v8a；不要设 cpu.abi（会破坏系统库加载）。board/platform 覆盖 goldfish_x86_64 这类模拟器标识。",
+  "brand": "samsung",
+  "device": "dm3q",
+  "model": "SM-S918B",
+  "name": "dm3q",
+  "product": "dm3q",
+  "manufacturer": "samsung",
+  "marketing": "Galaxy S23 Ultra",
+  "buildId": "",
+  "incremental": "",
+  "release": "",
+  "sdk": "",
+  "type": "user",
+  "tags": "release-keys",
+  "securityPatch": "",
+  "firstApiLevel": "33",
+  "board": "kalama",
+  "boardPlatform": "kalama",
+  "cpu": {
+    "abilist": "arm64-v8a,x86_64",
+    "abilist64": "arm64-v8a,x86_64",
+    "abilist32": ""
+  }
+}
