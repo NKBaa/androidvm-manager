@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('api', {
   pickSdkDir: () => invoke('ui:pickSdkDir'),
   sdk: {
     check: () => invoke('sdk:check'),
+    mirrors: () => invoke('sdk:mirrors'),
+    pending: () => invoke('sdk:pending'),
     download: (o) => invoke('sdk:download', o),
     cancel: () => invoke('sdk:cancel'),
     onProgress: (cb) => {

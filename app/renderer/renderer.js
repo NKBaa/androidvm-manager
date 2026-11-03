@@ -891,6 +891,24 @@ $('btnCellApply').addEventListener('click', async () => {
 $('btnCellStatus').addEventListener('click', async () => showCell(await call(bridge.cell.status(), '移动网络状态')));
 
 // ---------- SDK 检查（安装包首次运行常见） ----------
+let sdkMirrorsLoaded = false;
+
+async function loadSdkMirrors() {
+  if (sdkMirrorsLoaded) return;
+  const r = await call(bridge.sdk.mirrors(), '读取镜像源', true);
+  const sel = $('sdkMirror');
+  if (!r || !sel) return;
+  sel.innerHTML = '';
+  for (const m of r.mirrors || []) {
+    const o = document.createElement('option');
+    o.value = m.id;
+    o.textContent = m.name;
+    sel.appendChild(o);
+  }
+  sel.value = r.default || 'google';
+  sdkMirrorsLoaded = true;
+}
+
 async function checkSdk() {
   const info = await call(bridge.info(), '读取信息', true);
   if (!info) return;
@@ -900,9 +918,22 @@ async function checkSdk() {
   const b = $('sdkBanner');
   if (!b) return;
   b.style.display = 'flex';
-  $('sdkMsg').innerHTML =
-    `未找到 Android SDK（当前解析路径：<code>${escapeHtml(info.sdkRoot || '')}</code>）` +
-    ` —— 可在线下载，或选择已有的 SDK 目录`;
+  await loadSdkMirrors();
+
+  // 有未下完的分片就提示可以续传
+  const pending = await call(bridge.sdk.pending(), '读取续传状态', true);
+  const resumable = (pending || []).reduce((s, p) => s + (p.bytes || 0), 0);
+
+  // 路径太长会把提示条撑爆，只显示尾部
+  const full = info.sdkRoot || '';
+  const short = full.length > 44 ? '…' + full.slice(-43) : full;
+
+  const msg = $('sdkMsg');
+  msg.innerHTML =
+    `未找到 Android SDK（查找路径：<code>${escapeHtml(short)}</code>）` +
+    (resumable > 0 ? `　可续传 <b>${fmtMB(resumable)}</b>` : '') +
+    `　可在线下载，或选择已有 SDK 目录`;
+  msg.title = full;
 }
 
 // ---------- SDK 在线下载 ----------
@@ -951,7 +982,8 @@ function onSdkProgress(d) {
     return;
   }
   if (phase === 'download') {
-    $('sdkPhase').textContent = `${d.file}  ${fmtMB(d.received)} / ${fmtMB(d.total)}`;
+    const tag = d.resumedFrom > 0 ? '（续传）' : '';
+    $('sdkPhase').textContent = `${d.file}${tag}  ${fmtMB(d.received)} / ${fmtMB(d.total)}`;
     const pct = d.overallPercent || 0;
     $('sdkBar').style.width = pct.toFixed(1) + '%';
     $('sdkPct').textContent = pct.toFixed(0) + '%';
@@ -960,10 +992,15 @@ function onSdkProgress(d) {
   if (phase === 'resolve') { $('sdkPhase').textContent = d.message || '解析组件清单…'; return; }
   if (phase === 'resolved') {
     const n = (d.packages || []).length;
-    $('sdkPhase').textContent = `共 ${n} 个组件，合计 ${fmtMB(d.totalBytes || 0)}`;
+    $('sdkPhase').textContent = `${d.mirrorName || ''} · 共 ${n} 个组件，合计 ${fmtMB(d.totalBytes || 0)}`;
     return;
   }
-  if (phase === 'download-start') { $('sdkPhase').textContent = '开始下载 ' + d.file; return; }
+  if (phase === 'download-start') {
+    $('sdkPhase').textContent = d.resumable
+      ? `续传 ${d.file}（已有 ${fmtMB(d.resumedFrom)}）`
+      : '开始下载 ' + d.file;
+    return;
+  }
   if (phase === 'verify') { $('sdkPhase').textContent = '校验 ' + d.package + ' …'; return; }
   if (phase === 'extract') { $('sdkPhase').textContent = '解压 ' + d.package + ' …'; return; }
   if (phase === 'package-done') {
@@ -975,18 +1012,28 @@ function onSdkProgress(d) {
 }
 
 $('btnDownloadSdk').addEventListener('click', async () => {
+  await loadSdkMirrors();
+  const mirror = $('sdkMirror') ? $('sdkMirror').value : 'google';
+  const mirrorName = $('sdkMirror') && $('sdkMirror').selectedOptions[0]
+    ? $('sdkMirror').selectedOptions[0].textContent
+    : mirror;
+
+  const pending = await call(bridge.sdk.pending(), '读取续传状态', true);
+  const resumable = (pending || []).reduce((s, p) => s + (p.bytes || 0), 0);
+  const resumeLine = resumable > 0 ? `\n\n检测到未下完的分片（${fmtMB(resumable)}），将自动续传。` : '';
+
   const ok = window.confirm(
-    '将从 Google 官方源下载 Android SDK：\n\n' +
+    `将从 ${mirrorName} 下载 Android SDK：\n\n` +
       '  • emulator            约 439 MB\n' +
       '  • platform-tools      约 8 MB\n' +
       '  • Android 14 系统镜像  约 1491 MB\n\n' +
-      '合计约 1.9 GB，解压后约 5.4 GB。\n确定开始下载？'
+      `合计约 1.9 GB，解压后约 5.4 GB。${resumeLine}\n确定开始下载？`
   );
   if (!ok) return;
   showSdkProgress(true);
   $('sdkPhase').textContent = '准备中…';
   if (!sdkUnsub) sdkUnsub = bridge.sdk.onProgress(onSdkProgress);
-  const r = await call(bridge.sdk.download({}), '开始下载', true);
+  const r = await call(bridge.sdk.download({ mirror }), '开始下载', true);
   if (!r) {
     showSdkProgress(false);
     toast('无法开始下载', 'err');

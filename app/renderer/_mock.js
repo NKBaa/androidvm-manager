@@ -1,6 +1,9 @@
 // 预览用 mock：给 renderer.js 提供 window.api，并填充真实感数据
+//   ?sdkready=0  模拟「找不到 SDK」的状态（用于截 SDK 下载提示条）
 (() => {
   const ok = (data) => Promise.resolve({ ok: true, data });
+  const q = new URLSearchParams(location.search);
+  const SDK_READY = q.get('sdkready') !== '0';
   const cfg = {
     deviceKey: 'pixel_7', ram: 4096, cores: 4, diskGB: 6,
     root: true, writableSystem: true, snapshot: false,
@@ -18,7 +21,14 @@
     props: { release: '14', sdk: '34', model: 'SM-S918B', brand: 'samsung', root: true },
   };
   window.api = {
-    info: () => ok({ version: '1.0.0' }),
+    info: () =>
+      ok({
+        version: '1.0.0',
+        sdkReady: SDK_READY,
+        sdkRoot: 'C:\\Users\\me\\AppData\\Local\\Programs\\AndroidVM\\AndroidVM\\android-sdk',
+        packaged: true,
+        vmRoot: 'C:\\Users\\me\\AppData\\Local\\Programs\\AndroidVM\\AndroidVM',
+      }),
     config: { get: () => ok(cfg), save: (c) => ok(c) },
     vm: {
       start: () => ok({}), stop: () => ok({}), restart: () => ok({}),
@@ -74,7 +84,16 @@
       pickImage: () => ok(null),
     },
     sdk: {
-      check: () => ok({ ready: true }),
+      check: () => ok({ ready: SDK_READY }),
+      mirrors: () =>
+        ok({
+          mirrors: [
+            { id: 'google', name: 'Google 官方（dl.google.com）' },
+            { id: 'tencent', name: '腾讯云镜像（国内加速）' },
+          ],
+          default: 'google',
+        }),
+      pending: () => ok([{ file: 'x86_64-34_r14.zip.part', bytes: 812000000, mtime: 0 }]),
       download: () => ok({ started: true }),
       cancel: () => ok({ ok: true }),
       onProgress: () => () => {},

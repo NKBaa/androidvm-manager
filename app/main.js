@@ -144,10 +144,20 @@ ipcMain.handle('sdk:check', wrap(async () => {
 
 ipcMain.handle('sdk:cancel', wrap(async () => { sdkCancel = true; return { ok: true }; }));
 
+// 可用镜像源
+ipcMain.handle('sdk:mirrors', wrap(async () => ({
+  mirrors: sdkdownloader.MIRRORS,
+  default: sdkdownloader.DEFAULT_MIRROR,
+})));
+
+// 未下完的分片（用于界面提示「可续传」）
+ipcMain.handle('sdk:pending', wrap(async () => sdkdownloader.pendingDownloads(conf.sdkRoot)));
+
 ipcMain.handle('sdk:download', wrap(async (opts) => {
   sdkCancel = false;
   const sdkRoot = (opts && opts.sdkRoot) || conf.sdkRoot;
   const packages = (opts && opts.packages) || sdkdownloader.PRESETS.minimal;
+  const mirror = (opts && opts.mirror) || sdkdownloader.DEFAULT_MIRROR;
 
   const send = (o) => {
     try { if (win && !win.isDestroyed()) win.webContents.send('sdk:progress', o); } catch {}
@@ -158,6 +168,7 @@ ipcMain.handle('sdk:download', wrap(async (opts) => {
     .install({
       sdkRoot,
       packages,
+      mirror,
       onProgress: send,
       isCancelled: () => sdkCancel,
     })
@@ -167,7 +178,7 @@ ipcMain.handle('sdk:download', wrap(async (opts) => {
     })
     .catch((e) => send({ phase: 'error', message: e && e.message ? e.message : String(e) }));
 
-  return { started: true, sdkRoot, packages };
+  return { started: true, sdkRoot, packages, mirror };
 }));
 
 // ---------- 摄像头 ----------
