@@ -6,6 +6,10 @@ on:
       - 'v*'
   workflow_dispatch:
 
+# 发布 Release 需要写权限（默认 GITHUB_TOKEN 是只读的）
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -44,4 +48,7 @@ jobs:
         with:
           files: |
             dist/*.exe
-          generate_release_notes: true
+          # 不自动生成 release notes：需要额外的 notes 权限，
+          # 且发布说明由本地 gh release create 手写更可控
+          generate_release_notes: false
+          fail_on_unmatched_files: true
