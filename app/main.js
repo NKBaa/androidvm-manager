@@ -3,7 +3,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, Tray, Menu } = 
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
-const { execFile } = require('node:child_process');
+const { execFile, execFileSync } = require('node:child_process');
 const { conf } = require('./src/config');
 const { VmManager } = require('./src/vm');
 const adbmod = require('./src/adb');
@@ -186,6 +186,40 @@ function createTray() {
   });
 }
 
+/**
+ * 把真实的数据根目录记到注册表，卸载程序靠它找到并删除虚拟机数据。
+ * （安装目录下的 AndroidVM 只是默认位置，数据也可能落到 LOCALAPPDATA）
+ */
+function recordDataRoot() {
+  if (!conf.packaged) return;
+  // 便携版没有卸载程序，记这个没用，还会留垃圾
+  if (process.env.PORTABLE_EXECUTABLE_DIR) return;
+  try {
+    let current = '';
+    try {
+      const out = execFileSync('reg', ['query', 'HKLM\\Software\\AndroidVM', '/v', 'DataRoot'], {
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 8000,
+      });
+      const m = out.match(/DataRoot\s+REG_SZ\s+(.+)/);
+      if (m) current = m[1].trim();
+    } catch {
+      // 键不存在，走下面的写入
+    }
+    if (current === conf.vmRoot) return;
+
+    execFileSync(
+      'reg',
+      ['add', 'HKLM\\Software\\AndroidVM', '/v', 'DataRoot', '/t', 'REG_SZ', '/d', conf.vmRoot, '/f'],
+      { windowsHide: true, timeout: 8000 }
+    );
+  } catch (e) {
+    // 非管理员时写 HKLM 会失败，不影响功能，只是卸载时可能删不到自定义路径
+    console.warn('记录数据目录到注册表失败:', e.message);
+  }
+}
+
 app.whenReady().then(async () => {
   // 安装包首次运行：创建数据目录并从 resources/seed 播种真机库与档案
   try {
@@ -194,6 +228,7 @@ app.whenReady().then(async () => {
   } catch (e) {
     console.error('初始化数据目录失败:', e.message);
   }
+  recordDataRoot();
   createWindow();
   createTray();
   await adbmod.startAdbServer().catch(() => {});

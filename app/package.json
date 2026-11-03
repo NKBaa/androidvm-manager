@@ -89,7 +89,8 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Android 14 虚拟机管理器",
-      "deleteAppDataOnUninstall": false,
+      "deleteAppDataOnUninstall": true,
+      "include": "build/installer.nsh",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "artifactName": "AndroidVM-Setup-${version}.${ext}"
