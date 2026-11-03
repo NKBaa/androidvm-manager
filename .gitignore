@@ -15,6 +15,7 @@ _data/instances.json
 _data/instances/
 _data/active-profile.json
 _data/settings.json
+_data/camera/
 
 # ---- 依赖 ----
 node_modules/

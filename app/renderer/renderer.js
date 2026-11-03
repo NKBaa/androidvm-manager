@@ -317,8 +317,9 @@ async function loadConfig() {
   $('phCountry').value = ph.country || '';
 
   const cam = config.camera;
-  $('camBack').value = cam.back || 'virtualscene';
-  $('camFront').value = cam.front || 'emulated';
+  // 下拉框由 refreshCamData() 填充，这里先记下配置里的待选值
+  camState.pendingBack = camValueOf(cam.back || 'virtualscene');
+  camState.pendingFront = camValueOf(cam.front || 'emulated');
   $('hwRoot').checked = !!config.root;
 }
 
@@ -527,16 +528,246 @@ $('btnAudio').addEventListener('click', async () => {
   $('audioOut').textContent = JSON.stringify(r || '', null, 2);
 });
 
+// ==================== 摄像头 ====================
+const camState = { hosts: [], images: [], loaded: false };
+
+/** 把配置值（如 "webcam0" / "imagefile:C:\x.png"）转成下拉框的 value */
+function camValueOf(iniVal) {
+  if (!iniVal) return 'emulated';
+  if (/^webcam(\d+)$/i.test(iniVal)) return 'webcam:' + iniVal.match(/^webcam(\d+)$/i)[1];
+  const m = iniVal.match(/^imagefile:(.+)$/i);
+  if (m) return 'image:' + m[1].split(/[\\/]/).pop();
+  return iniVal;
+}
+
+/** 下拉框 value 转成后端要的 spec 对象 */
+function camSpecOf(value) {
+  if (value === 'none' || value === 'emulated' || value === 'virtualscene') return { mode: value };
+  if (value.startsWith('webcam:')) return { mode: 'webcam', index: Number(value.slice(7)) };
+  if (value.startsWith('image:')) {
+    const name = value.slice(6);
+    const hit = camState.images.find((i) => i.name === name);
+    if (!hit) throw new Error('找不到图片素材: ' + name);
+    return { mode: 'imagefile', path: hit.path };
+  }
+  return { mode: 'emulated' };
+}
+
+function fillCamSelect(el, current) {
+  const groups = [];
+  groups.push(['基本', [
+    ['none', '无'],
+    ['emulated', '模拟画面（彩条）'],
+    ['virtualscene', '虚拟场景（3D）'],
+  ]]);
+  if (camState.hosts.length) {
+    groups.push(['宿主机摄像头', camState.hosts.map((c) => ['webcam:' + c.index, c.name + (c.approximate ? '（近似）' : '')])]);
+  } else {
+    groups.push(['宿主机摄像头', [['__nocam', '未检测到摄像头']]]);
+  }
+  if (camState.images.length) {
+    groups.push(['图片 / 屏幕区域（实验性）', camState.images.map((i) => ['image:' + i.name, i.name])]);
+  } else {
+    groups.push(['图片 / 屏幕区域（实验性）', [['__noimg', '还没有素材，用下方按钮生成']]]);
+  }
+
+  el.innerHTML = '';
+  for (const [label, opts] of groups) {
+    const og = document.createElement('optgroup');
+    og.label = label;
+    for (const [v, t] of opts) {
+      const o = document.createElement('option');
+      o.value = v;
+      o.textContent = t;
+      if (v.startsWith('__')) o.disabled = true;
+      og.appendChild(o);
+    }
+    el.appendChild(og);
+  }
+  if (current) el.value = current;
+  if (!el.value) el.value = 'emulated';
+}
+
+function renderCamImages() {
+  const box = $('camImgs');
+  if (!box) return;
+  if (!camState.images.length) {
+    box.innerHTML = '<p class="hint">还没有素材。点「框选屏幕区域」或「选择图片文件」生成。</p>';
+    return;
+  }
+  box.innerHTML = '';
+  for (const it of camState.images) {
+    const d = document.createElement('div');
+    d.className = 'cam-img';
+    d.dataset.name = it.name;
+    d.innerHTML =
+      (it.dataUrl ? `<img src="${it.dataUrl}" alt="">` : '') +
+      `<span title="${escapeHtml(it.name)}">${escapeHtml(it.name)}</span>` +
+      `<button title="删除">×</button>`;
+    d.querySelector('button').addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      if (!window.confirm('删除素材「' + it.name + '」？')) return;
+      await call(bridge.camera.deleteImage(it.name), '删除素材', true);
+      await refreshCamData();
+    });
+    d.addEventListener('click', () => {
+      // 点缩略图 = 把它设为后置摄像头
+      $('camBack').value = 'image:' + it.name;
+      toast('已选中 ' + it.name + ' 作为后置，点「应用并重启」生效');
+    });
+    box.appendChild(d);
+  }
+}
+
+async function refreshCamData() {
+  const [hosts, images] = await Promise.all([
+    call(bridge.camera.hosts(), '枚举摄像头', true),
+    call(bridge.camera.images(), '读取素材', true),
+  ]);
+  camState.hosts = hosts || [];
+  camState.images = images || [];
+  const curB = camState.loaded ? $('camBack').value : camState.pendingBack;
+  const curF = camState.loaded ? $('camFront').value : camState.pendingFront;
+  fillCamSelect($('camBack'), curB);
+  fillCamSelect($('camFront'), curF);
+  renderCamImages();
+  camState.loaded = true;
+}
+
 $('btnCamApply').addEventListener('click', async () => {
-  const r = await call(bridge.dev.camera({ back: $('camBack').value, front: $('camFront').value }), '应用摄像头设置');
+  let spec;
+  try {
+    spec = { back: camSpecOf($('camBack').value), front: camSpecOf($('camFront').value) };
+  } catch (e) {
+    toast(e.message, 'err');
+    return;
+  }
+  const r = await call(bridge.camera.set(spec), '应用摄像头设置');
   $('camOut').textContent = JSON.stringify(r || '', null, 2) + '\n（重启虚拟机后生效）';
-  config.camera = { back: $('camBack').value, front: $('camFront').value };
+  config.camera = {
+    back: $('camBack').value,
+    front: $('camFront').value,
+  };
   await call(bridge.config.save(config), '保存', true);
+
+  if (r && r.ok) {
+    const restart = window.confirm('摄像头设置已写入。\n\n现在重启虚拟机让它生效吗？');
+    if (restart) {
+      toast('正在重启虚拟机…');
+      await call(bridge.vm.restart(), '重启虚拟机', true);
+    }
+  }
 });
+
 $('btnCamStatus').addEventListener('click', async () => {
-  const r = await call(bridge.dev.cameraStatus(), '读取摄像头', true);
+  const r = await call(bridge.camera.status(), '读取摄像头', true);
   $('camOut').textContent = JSON.stringify(r || '', null, 2);
-  if (r) { $('camBack').value = r.back || 'virtualscene'; $('camFront').value = r.front || 'emulated'; }
+  if (r) {
+    $('camBack').value = camValueOf(r.back);
+    $('camFront').value = camValueOf(r.front);
+  }
+});
+
+$('btnCamRefreshImgs').addEventListener('click', async () => {
+  await refreshCamData();
+  toast('素材已刷新', 'ok');
+});
+
+$('btnCamPickFile').addEventListener('click', async () => {
+  const r = await call(bridge.camera.pickImage(), '选择图片', true);
+  if (!r || !r.ok) return;
+  await refreshCamData();
+  $('camBack').value = 'image:' + r.name;
+  toast('已添加素材 ' + r.name + '，点「应用并重启」生效', 'ok');
+});
+
+// ---------- 屏幕区域框选 ----------
+const regionState = { dataUrl: null, imgW: 0, imgH: 0, rect: null, dragging: false, sx: 0, sy: 0 };
+
+function regionRectFromEvent(ev) {
+  const stage = $('regionStage');
+  const img = $('regionImg');
+  const ir = img.getBoundingClientRect();
+  const sr = stage.getBoundingClientRect();
+  // 图片在 stage 里居中显示，换算成图片内坐标
+  const offX = ir.left - sr.left;
+  const offY = ir.top - sr.top;
+  const scale = regionState.imgW / ir.width;
+  const x = (ev.clientX - sr.left - offX) * scale;
+  const y = (ev.clientY - sr.top - offY) * scale;
+  return { x: Math.max(0, Math.min(regionState.imgW, x)), y: Math.max(0, Math.min(regionState.imgH, y)), offX, offY, scale };
+}
+
+function drawRegionSel(a, b) {
+  const sel = $('regionSel');
+  const x = Math.min(a.x, b.x);
+  const y = Math.min(a.y, b.y);
+  const w = Math.abs(a.x - b.x);
+  const h = Math.abs(a.y - b.y);
+  sel.style.display = 'block';
+  sel.style.left = (a.offX + x / a.scale) + 'px';
+  sel.style.top = (a.offY + y / a.scale) + 'px';
+  sel.style.width = (w / a.scale) + 'px';
+  sel.style.height = (h / a.scale) + 'px';
+  regionState.rect = { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
+  $('regionSize').textContent = `${regionState.rect.w} × ${regionState.rect.h}`;
+  $('btnRegionOk').disabled = regionState.rect.w < 8 || regionState.rect.h < 8;
+}
+
+$('btnCamRegion').addEventListener('click', async () => {
+  const shot = await call(bridge.camera.captureScreen(), '抓取屏幕', true);
+  if (!shot) return;
+  regionState.dataUrl = shot.dataUrl;
+  regionState.imgW = shot.width;
+  regionState.imgH = shot.height;
+  regionState.rect = null;
+  $('regionImg').src = shot.dataUrl;
+  $('regionSel').style.display = 'none';
+  $('regionSize').textContent = '';
+  $('btnRegionOk').disabled = true;
+  $('regionModal').style.display = 'flex';
+});
+
+$('regionStage').addEventListener('mousedown', (ev) => {
+  if (ev.button !== 0) return;
+  regionState.dragging = true;
+  regionState.sx = regionRectFromEvent(ev);
+  regionState.sy = regionState.sx;
+  $('regionSel').style.display = 'block';
+});
+
+$('regionStage').addEventListener('mousemove', (ev) => {
+  if (!regionState.dragging) return;
+  const cur = regionRectFromEvent(ev);
+  drawRegionSel(regionState.sx, cur);
+});
+
+$('regionStage').addEventListener('mouseup', (ev) => {
+  if (!regionState.dragging) return;
+  regionState.dragging = false;
+  drawRegionSel(regionState.sx, regionRectFromEvent(ev));
+});
+
+$('btnRegionCancel').addEventListener('click', () => {
+  regionState.dragging = false;
+  $('regionModal').style.display = 'none';
+});
+
+$('btnRegionOk').addEventListener('click', async () => {
+  if (!regionState.rect) return;
+  const r = await call(
+    bridge.camera.crop({
+      dataUrl: regionState.dataUrl,
+      rect: regionState.rect,
+      name: 'region-' + new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14),
+    }),
+    '保存选区'
+  );
+  $('regionModal').style.display = 'none';
+  if (!r || !r.ok) return;
+  await refreshCamData();
+  $('camBack').value = 'image:' + r.name;
+  toast('已保存素材 ' + r.name + '，点「应用并重启」生效', 'ok');
 });
 
 $('btnDeviceApply').addEventListener('click', async () => {
@@ -781,6 +1012,7 @@ $('btnPickSdk').addEventListener('click', async () => {
   buildPresets();
   await refreshInstances();
   await loadConfig();
+  await refreshCamData();
   await refreshStatus();
   statusTimer = setInterval(async () => {
     await refreshStatus();

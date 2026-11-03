@@ -451,26 +451,24 @@
         <div class="card">
           <h2>摄像头</h2>
           <label>后置摄像头
-            <select id="camBack">
-              <option value="virtualscene">虚拟场景（默认）</option>
-              <option value="emulated">模拟画面</option>
-              <option value="webcam0">宿主机摄像头 0</option>
-              <option value="none">无</option>
-            </select>
+            <select id="camBack"></select>
           </label>
           <label>前置摄像头
-            <select id="camFront">
-              <option value="emulated">模拟画面（默认）</option>
-              <option value="virtualscene">虚拟场景</option>
-              <option value="webcam0">宿主机摄像头 0</option>
-              <option value="none">无</option>
-            </select>
+            <select id="camFront"></select>
           </label>
-          <div class="row">
-            <button class="btn small primary" id="btnCamApply">应用</button>
+          <div class="row wrap">
+            <button class="btn small primary" id="btnCamApply">应用并重启</button>
             <button class="btn small" id="btnCamStatus">读取</button>
           </div>
-          <p class="hint">切换摄像头需要重启虚拟机。</p>
+          <p class="hint">切换摄像头需重启虚拟机才生效。宿主机摄像头为真实调用；「图片 / 屏幕区域」为实验性功能，部分模拟器版本会回退成模拟画面。</p>
+
+          <h3 class="sub-h">摄像头素材</h3>
+          <div class="row wrap">
+            <button class="btn small" id="btnCamRegion">框选屏幕区域</button>
+            <button class="btn small" id="btnCamPickFile">选择图片文件</button>
+            <button class="btn small" id="btnCamRefreshImgs">刷新</button>
+          </div>
+          <div class="cam-imgs" id="camImgs"><p class="hint">还没有素材</p></div>
           <pre class="mono small" id="camOut">—</pre>
         </div>
 
@@ -513,6 +511,21 @@
     <span class="sb-toast" id="toast"></span>
   </footer>
 </div>
+
+<!-- ================= 屏幕区域框选 ================= -->
+<div class="region-modal" id="regionModal" style="display:none">
+  <div class="region-bar">
+    <span class="region-hint" id="regionHint">按住鼠标拖动，框选要作为摄像头画面的区域</span>
+    <span class="region-size" id="regionSize"></span>
+    <button class="btn small primary" id="btnRegionOk" disabled>确定</button>
+    <button class="btn small" id="btnRegionCancel">取消</button>
+  </div>
+  <div class="region-stage" id="regionStage">
+    <img id="regionImg" alt="" />
+    <div class="region-sel" id="regionSel" style="display:none"></div>
+  </div>
+</div>
+
 <script src="renderer.js"></script>
 </body>
 </html>

@@ -17,6 +17,16 @@ contextBridge.exposeInMainWorld('api', {
       return () => ipcRenderer.removeListener('sdk:progress', h);
     },
   },
+  camera: {
+    hosts: () => invoke('camera:hosts'),
+    status: () => invoke('camera:status'),
+    set: (src) => invoke('camera:set', src),
+    images: () => invoke('camera:images'),
+    deleteImage: (n) => invoke('camera:deleteImage', n),
+    captureScreen: () => invoke('camera:captureScreen'),
+    crop: (o) => invoke('camera:crop', o),
+    pickImage: () => invoke('camera:pickImage'),
+  },
   config: {
     get: () => invoke('config:get'),
     save: (c) => invoke('config:save', c),

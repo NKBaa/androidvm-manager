@@ -59,6 +59,26 @@
       shell: () => ok('ok'), rootShell: () => ok('ok'), console: () => ok('OK'),
       key: () => ok({}), rotate: () => ok({}),
     },
+    camera: {
+      hosts: () => ok([{ index: 0, name: 'USB2.0 HD UVC WebCam', mode: 'webcam0' }]),
+      status: () => ok({ back: 'virtualscene', front: 'emulated', images: [] }),
+      set: () => ok({ ok: true, needRestart: true }),
+      images: () =>
+        ok([
+          { name: 'region-20261103-210500.png', path: 'a', size: 128000, dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPAAAACWCAIAAABvmpKCAAAB+klEQVR4nO3csW0CQRBAUbAoA1kWEZFFYFMGDVAf1ZAQEiICR5ZrcAcOrNOt9O+9dIOb4GuSW+36/XhaQcXL6AFgSoImRdCkCJoUQZMiaFIETYqgSRE0KYImRdCkCJoUQZMiaFIETYqgSRE0KYImRdCkCJoUQZMiaFI2P99fo2eAydjQpAiaFEGTImhSBE2KoEkRNCmCJkXQpAiaFEGTImhSNn8fH87XuSbpu10+R4/QZ0OTImhSBE2KoEkRNCmCJkXQpAiaFEGTImhSBE2KoEkRNCmCJkXQpAiaFEGTImhSBE2KoEkRNCmCJmW93X2MngEmY0OTImhSBE2KoEkRNCmCJkXQpAiaJb0P/fq2n2sSap6P+/wftaFJETQpgiZF0KQImhRBkyJoUgRNiqBJETQpgiZF0KQImhRBkyJoUgTNki74D7mjDf9mQ5MiaFIETYqgSRE0KYImRdCkCJoULyf1PZf0d8yGJkXQpAiaFEGTImhSBE2KoEkRNCmCJkXQpAiaFEGTImhSBE2KoEkRNCleTiLFhiZF0KQImhRBkyJoUgRNiqBJETQpgiZF0KQImhRBkyJoUgRNiqBJETQpgiZF0KQImhRBkyJoUgRNiqBJETQpgiZF0KQImhRBkyJoUgRNiqBJETQpgiZF0KQImhRBkyJoUgTNquQXK80TTwznvBgAAAAASUVORK5CYII=' },
+          { name: 'avatar.jpg', path: 'b', size: 24000, dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAAB4CAIAAAC2BqGFAAACJElEQVR4nO3cwU3EQAxA0TBKHZxTBEVQBCVwoAhKoAjKoASfqQSJ6yqIw863Pfn/vGycJzMbJODh6+1ps/kN4BomNJcbDSU0lNBQQkMJDSU0lNBQQkMJDSU0lNBQQkMJDSU0lNBQQkMJDSU0lNBQ+9ah4/nl7xfE58dWu70v7tmLa6Lv3YnPvrwa976M79m7FREfSyoz79xso4/5EBUOk+SNPsB1y13tTOgDv/NE6zToI+mes66bA32kfhenXD0B+ijwGMDPMC6onDLJuKYyP8+4rDI8VZWfDJdvXHmdydnGxZWxCT06oIReBbr+ucHM6UZDzYXuss7AtG40lNBQQveH7nVAz57ZjYYSGkpoKKGhhIYSGkpoKKGhhIYSuj90kd8ALzKzGw0lNJTQS0D3OqZj5rRuNNR06C5LHZPndKOhhF4IOsqfHsCE0EZHYWtmNo8OKA46Si41NhW60VHMmpyHPjqijDU8ScIZHQWs+RlyPgwj1Trl6mlPHZFknXXdzMe7wO858Tsp+Tk6wDvPPa/y/9VP/N7/1N/xrfDxW+Unw5hmUUG5xEbfitxlu4v4VoS+12FSjbgu9K2X/5sUKkouacsPw+UTutsZ/frd74/d/tn74x0OLjcaSmgooaGEhhIaSmgooaGEhhIaSmgooaGEhhIaSmgooaGEhhIaSmgooaGEhhIaSmgooaGEhhIaSmgooaGEhhIaSmgooaGEhhJ6Y/oBvdaCpsJWBsYAAAAASUVORK5CYII=' },
+        ]),
+      deleteImage: () => ok({ ok: true }),
+      captureScreen: () => ok(null),
+      crop: () => ok({ ok: true, name: 'region-x.png', path: 'c' }),
+      pickImage: () => ok(null),
+    },
+    sdk: {
+      check: () => ok({ ready: true }),
+      download: () => ok({ started: true }),
+      cancel: () => ok({ ok: true }),
+      onProgress: () => () => {},
+    },
     ui: { pickApk: () => ok(null), installApk: () => ok('Success') },
     profile: {
       db: () => ok({ devices: 54328, brands: 3879 }), search: () => ok([]),

@@ -15,6 +15,7 @@ const bt = require('./src/bluetooth');
 const cell = require('./src/cellular');
 const instances = require('./src/instances');
 const sdkdownloader = require('./src/sdkdownloader');
+const cameramod = require('./src/camera');
 
 // ---------------------------------------------------------------
 // 多开：每个实例一个 VmManager，按需创建并缓存。
@@ -135,7 +136,6 @@ ipcMain.handle('ui:pickSdkDir', wrap(async () => {
 
 // ---------- SDK 在线下载 ----------
 let sdkCancel = false;
-
 ipcMain.handle('sdk:check', wrap(async () => {
   const r = sdkdownloader.checkSdk(conf.sdkRoot);
   conf.sdkReady = r.ready;
@@ -168,6 +168,27 @@ ipcMain.handle('sdk:download', wrap(async (opts) => {
     .catch((e) => send({ phase: 'error', message: e && e.message ? e.message : String(e) }));
 
   return { started: true, sdkRoot, packages };
+}));
+
+// ---------- 摄像头 ----------
+ipcMain.handle('camera:hosts', wrap(async () => cameramod.listHostCameras()));
+ipcMain.handle('camera:status', wrap(async () => cameramod.getStatus()));
+ipcMain.handle('camera:set', wrap(async (src) => cameramod.setSource(src || {})));
+ipcMain.handle('camera:images', wrap(async () => cameramod.listImagesWithThumbs()));
+ipcMain.handle('camera:deleteImage', wrap(async (name) => cameramod.deleteImage(name)));
+ipcMain.handle('camera:captureScreen', wrap(async () => cameramod.captureScreen()));
+ipcMain.handle('camera:crop', wrap(async (o) => cameramod.cropAndSave(o.dataUrl, o.rect, o.name)));
+ipcMain.handle('camera:pickImage', wrap(async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: '选择作为摄像头画面的图片',
+    properties: ['openFile'],
+    filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg'] }],
+  });
+  if (r.canceled || !r.filePaths.length) return null;
+  const src = r.filePaths[0];
+  const buf = fs.readFileSync(src);
+  const ext = path.extname(src).toLowerCase() === '.png' ? 'png' : 'jpg';
+  return cameramod.saveImage(`data:image/${ext};base64,${buf.toString('base64')}`, path.basename(src));
 }));
 
 // ---------- 多开实例 ----------
