@@ -1298,7 +1298,12 @@ async function handleCtxAction(act, it) {
     }
 
     case 'rename': {
-      const name = window.prompt('重命名设备', it.name);
+      const name = await askText({
+        title: '重命名设备',
+        desc: '只影响管理器里的显示名称，不会改动虚拟机内部。',
+        value: it.name,
+        placeholder: '设备名称',
+      });
       if (!name || name === it.name) return;
       const r = await call(bridge.instances.rename(it.id, name), '重命名');
       if (r) {
@@ -1375,37 +1380,135 @@ function onTaskProgress(d) {
   }
 }
 
+// ==================== 通用输入对话框 ====================
+let inputResolve = null;
+
+/** 替代 window.prompt：返回 Promise，用户取消时 resolve(null) */
+function askText({ title = '', desc = '', value = '', placeholder = '' } = {}) {
+  return new Promise((resolve) => {
+    inputResolve = resolve;
+    $('inputTitle').textContent = title;
+    const d = $('inputDesc');
+    d.textContent = desc;
+    d.style.display = desc ? '' : 'none';
+    $('inputField').value = value;
+    $('inputField').placeholder = placeholder;
+    $('inputDlg').style.display = 'flex';
+    setTimeout(() => {
+      $('inputField').focus();
+      $('inputField').select();
+    }, 30);
+  });
+}
+
+function closeInputDlg(result) {
+  $('inputDlg').style.display = 'none';
+  const r = inputResolve;
+  inputResolve = null;
+  if (r) r(result);
+}
+
+$('inputOk').addEventListener('click', () => closeInputDlg($('inputField').value.trim()));
+$('inputCancel').addEventListener('click', () => closeInputDlg(null));
+$('inputField').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    closeInputDlg($('inputField').value.trim());
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    closeInputDlg(null);
+  }
+});
+$('inputDlg').addEventListener('click', (e) => {
+  if (e.target === $('inputDlg')) closeInputDlg(null);
+});
+
 // ---------- 备份与还原 ----------
+let backupTarget = null;
+
 async function openBackupDialog(it) {
-  const list = await call(bridge.instances.backups(it.id), '读取备份', true);
-  const lines = (list || [])
-    .slice(0, 8)
-    .map((b, i) => `${i + 1}. ${b.file.replace(/\.img$/, '')}  (${(b.bytes / 1024 / 1024 / 1024).toFixed(2)} GB)`)
-    .join('\n');
-  const tip =
-    `「${it.name}」的备份\n\n` +
-    (list && list.length ? `已有备份：\n${lines}\n\n` : '还没有备份。\n\n') +
-    '输入序号还原某个备份，直接回车则创建新备份。';
+  backupTarget = it;
+  $('backupDevName').textContent = it.name;
+  $('backupDlg').style.display = 'flex';
+  await renderBackupList();
+}
 
-  const ans = window.prompt(tip, '');
-  if (ans === null) return;
+function closeBackupDialog() {
+  $('backupDlg').style.display = 'none';
+  backupTarget = null;
+}
 
-  const n = parseInt(ans, 10);
-  if (Number.isFinite(n) && n >= 1 && list && list[n - 1]) {
-    if (devStatusOf(it).running) {
-      toast('虚拟机正在运行，请先关闭再还原', 'err');
-      return;
-    }
-    const ok = window.confirm('还原会覆盖当前数据分区，不可撤销。继续？');
-    if (!ok) return;
-    const r = await call(bridge.instances.restore(it.id, list[n - 1].file), '还原备份');
-    if (r) toast('已还原，重新启动虚拟机生效', 'ok');
+function fmtTime(ms) {
+  const d = new Date(ms);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+async function renderBackupList() {
+  const it = backupTarget;
+  const box = $('backupList');
+  if (!it || !box) return;
+  box.innerHTML = '<div class="backup-empty">读取中…</div>';
+
+  const list = (await call(bridge.instances.backups(it.id), '读取备份', true)) || [];
+  if (!list.length) {
+    box.innerHTML = '<div class="backup-empty">还没有备份</div>';
     return;
   }
 
-  const r = await call(bridge.instances.backup(it.id), '备份');
-  if (r) toast(`备份完成（${(r.bytes / 1024 / 1024 / 1024).toFixed(2)} GB）`, 'ok');
+  box.innerHTML = '';
+  for (const b of list) {
+    const el = document.createElement('div');
+    el.className = 'backup-item';
+    el.innerHTML =
+      `<div class="bi-main">
+         <div class="bi-time">${fmtTime(b.mtime)}</div>
+         <div class="bi-meta">${(b.bytes / 1024 / 1024 / 1024).toFixed(2)} GB</div>
+       </div>
+       <button class="btn small" data-act="restore">还原</button>
+       <button class="btn small danger" data-act="delete">删除</button>`;
+
+    el.querySelector('[data-act="restore"]').addEventListener('click', async () => {
+      if (devStatusOf(it).running) {
+        toast('虚拟机正在运行，请先关闭再还原', 'err');
+        return;
+      }
+      if (!window.confirm(`还原到 ${fmtTime(b.mtime)} 的备份？\n\n当前数据分区会被覆盖，不可撤销。`)) return;
+      const r = await call(bridge.instances.restore(it.id, b.file), '还原备份');
+      if (r) toast('已还原，重新启动虚拟机生效', 'ok');
+    });
+
+    el.querySelector('[data-act="delete"]').addEventListener('click', async () => {
+      if (!window.confirm(`删除这个备份？\n\n${fmtTime(b.mtime)} · ${(b.bytes / 1024 / 1024 / 1024).toFixed(2)} GB\n删除后无法恢复。`)) return;
+      const r = await call(bridge.instances.deleteBackup(it.id, b.file), '删除备份');
+      if (r) {
+        toast('已删除备份', 'ok');
+        await renderBackupList();
+      }
+    });
+
+    box.appendChild(el);
+  }
 }
+
+$('backupCreate').addEventListener('click', async () => {
+  if (!backupTarget) return;
+  const btn = $('backupCreate');
+  btn.disabled = true;
+  btn.textContent = '备份中…';
+  const r = await call(bridge.instances.backup(backupTarget.id), '备份');
+  btn.disabled = false;
+  btn.textContent = '＋ 创建新备份';
+  if (r) {
+    toast(`备份完成（${(r.bytes / 1024 / 1024 / 1024).toFixed(2)} GB）`, 'ok');
+    await renderBackupList();
+  }
+});
+
+$('backupClose').addEventListener('click', closeBackupDialog);
+$('backupDlg').addEventListener('click', (e) => {
+  if (e.target === $('backupDlg')) closeBackupDialog();
+});
 
 // ==================== 设备设置弹窗 ====================
 let dlgTarget = null;
@@ -1539,30 +1642,80 @@ $('btnNewDevice').addEventListener('click', async () => {
   }
 });
 
-$('btnBatchOp').addEventListener('click', () => {
-  const running = devCache.filter((d) => d.online).length;
-  const ans = window.prompt(
-    `批量操作\n\n共 ${devCache.length} 台设备，其中 ${running} 台运行中。\n\n输入数字：\n1 = 全部启动\n2 = 全部停止\n3 = 刷新状态`,
-    ''
-  );
-  if (!ans) return;
-  if (ans.trim() === '1') batchAll('start');
-  else if (ans.trim() === '2') batchAll('stop');
-  else refreshDevices();
-});
+$('btnBatchOp').addEventListener('click', () => openBatchDialog());
 
-async function batchAll(kind) {
+function openBatchDialog() {
+  const box = $('batchList');
+  const running = devCache.filter((d) => d.online).length;
+  $('batchDesc').textContent = devCache.length
+    ? `共 ${devCache.length} 台设备，其中 ${running} 台运行中。勾选后选择启动或停止。`
+    : '还没有设备。';
+  $('batchAll').checked = false;
+
+  box.innerHTML = '';
+  if (!devCache.length) {
+    box.innerHTML = '<div class="backup-empty">还没有设备</div>';
+  }
   for (const it of devCache) {
     const st = devStatusOf(it);
-    if (kind === 'start' && !st.running) {
-      await call(bridge.instances.setActive(it.id), '切换实例', true);
-      await call(bridge.vm.start({}), `启动 ${it.name}`, true);
-    } else if (kind === 'stop' && st.running) {
-      await call(bridge.instances.setActive(it.id), '切换实例', true);
-      await call(bridge.vm.stop(), `停止 ${it.name}`, true);
-    }
+    const el = document.createElement('label');
+    el.className = 'batch-item';
+    el.innerHTML =
+      `<input type="checkbox" value="${escapeHtml(it.id)}" />` +
+      `<span class="bi-name">${escapeHtml(it.name)}</span>` +
+      `<span class="bi-state${st.running ? ' on' : ''}">${st.text}</span>`;
+    box.appendChild(el);
   }
-  toast(kind === 'start' ? '已下发启动指令' : '已下发停止指令', 'ok');
+  $('batchDlg').style.display = 'flex';
+}
+
+function closeBatchDialog() {
+  $('batchDlg').style.display = 'none';
+}
+
+function batchSelectedIds() {
+  return [...document.querySelectorAll('#batchList input[type=checkbox]:checked')].map((c) => c.value);
+}
+
+$('batchAll').addEventListener('change', (e) => {
+  document.querySelectorAll('#batchList input[type=checkbox]').forEach((c) => {
+    c.checked = e.target.checked;
+  });
+});
+
+$('batchStart').addEventListener('click', async () => {
+  const ids = batchSelectedIds();
+  if (!ids.length) return toast('请先勾选设备', 'err');
+  closeBatchDialog();
+  await batchRun(ids, 'start');
+});
+
+$('batchStop').addEventListener('click', async () => {
+  const ids = batchSelectedIds();
+  if (!ids.length) return toast('请先勾选设备', 'err');
+  closeBatchDialog();
+  await batchRun(ids, 'stop');
+});
+
+$('batchCancel').addEventListener('click', closeBatchDialog);
+$('batchDlg').addEventListener('click', (e) => {
+  if (e.target === $('batchDlg')) closeBatchDialog();
+});
+
+async function batchRun(ids, kind) {
+  const targets = devCache.filter((d) => ids.includes(d.id));
+  let done = 0;
+  for (const it of targets) {
+    const st = devStatusOf(it);
+    if (kind === 'start' && st.running) continue;
+    if (kind === 'stop' && !st.running) continue;
+    toast(`正在${kind === 'start' ? '启动' : '停止'} ${it.name}…（${done + 1}/${targets.length}）`);
+    await call(bridge.instances.setActive(it.id), '切换实例', true);
+    if (kind === 'start') await call(bridge.vm.start({}), `启动 ${it.name}`, true);
+    else await call(bridge.vm.stop(), `停止 ${it.name}`, true);
+    done++;
+  }
+  toast(done ? `已处理 ${done} 台设备` : '没有需要操作的设备', done ? 'ok' : '');
   await refreshDevices();
 }
 

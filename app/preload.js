@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld('api', {
     clean: (id) => invoke('instances:clean', id),
     backup: (id) => invoke('instances:backup', id),
     backups: (id) => invoke('instances:backups', id),
+    deleteBackup: (id, file) => invoke('instances:deleteBackup', id, file),
     restore: (id, file) => invoke('instances:restore', id, file),
     shortcut: (id) => invoke('instances:shortcut', id),
     thumb: (id) => invoke('instances:thumb', id),

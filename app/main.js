@@ -515,6 +515,16 @@ ipcMain.handle('instances:backups', wrap(async (id) => {
   }
 }));
 
+ipcMain.handle('instances:deleteBackup', wrap(async (id, file) => {
+  const dir = path.join(conf.vmRoot, '_data', 'backups');
+  const target = path.join(dir, path.basename(String(file)));
+  // 只允许删该实例自己的备份文件，避免路径穿越
+  if (!path.basename(String(file)).startsWith(id + '-')) throw new Error('不是该设备的备份');
+  if (!fs.existsSync(target)) throw new Error('备份文件不存在');
+  fs.rmSync(target, { force: true });
+  return { ok: true, file: path.basename(target) };
+}));
+
 ipcMain.handle('instances:restore', wrap(async (id, file) => {
   const inst = instances.get(id);
   if (!inst) throw new Error('实例不存在');

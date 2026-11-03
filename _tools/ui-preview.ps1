@@ -52,7 +52,10 @@ $extra = @(
   @{ n = 'ui_launcher';    q = 'view=launcher' },
   @{ n = 'ui_ctxmenu';     q = 'view=launcher&ctx=1' },
   @{ n = 'ui_devsettings'; q = 'view=launcher&dlg=perf' },
-  @{ n = 'ui_sdk_banner';  q = 'tab=device&sdkready=0' }
+  @{ n = 'ui_sdk_banner';  q = 'tab=device&sdkready=0' },
+  @{ n = 'ui_mini_input';  q = 'view=launcher&mini=input' },
+  @{ n = 'ui_mini_backup'; q = 'view=launcher&mini=backup' },
+  @{ n = 'ui_mini_batch';  q = 'view=launcher&mini=batch' }
 )
 foreach ($e in $extra) {
   $out = Join-Path $logs "$($e.n).png"

@@ -869,6 +869,52 @@
   </div>
 </div>
 
+<!-- ================= 通用输入对话框（重命名 / 新建） ================= -->
+<div class="mini-mask" id="inputDlg" style="display:none">
+  <div class="mini">
+    <h3 id="inputTitle">重命名</h3>
+    <p class="mini-desc" id="inputDesc"></p>
+    <input type="text" id="inputField" class="mini-input" autocomplete="off" />
+    <div class="mini-foot">
+      <button class="btn" id="inputCancel">取消</button>
+      <button class="btn primary" id="inputOk">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 备份与还原 ================= -->
+<div class="mini-mask" id="backupDlg" style="display:none">
+  <div class="mini wide">
+    <h3>备份与还原 · <span id="backupDevName" class="mini-strong"></span></h3>
+    <p class="mini-desc">
+      备份会把整个数据分区复制一份（体积与数据分区相当，可能需要几分钟）。<br />
+      还原会覆盖当前数据分区，<span class="mini-warn">虚拟机必须先关闭</span>。
+    </p>
+    <div class="backup-list" id="backupList"></div>
+    <div class="mini-foot">
+      <button class="btn small primary" id="backupCreate">＋ 创建新备份</button>
+      <div class="mini-spacer"></div>
+      <button class="btn" id="backupClose">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 批量操作 ================= -->
+<div class="mini-mask" id="batchDlg" style="display:none">
+  <div class="mini wide">
+    <h3>批量操作</h3>
+    <p class="mini-desc" id="batchDesc">勾选要操作的设备，再选择启动或停止。</p>
+    <div class="batch-list" id="batchList"></div>
+    <div class="mini-foot">
+      <label class="batch-all"><input type="checkbox" id="batchAll" /> 全选</label>
+      <div class="mini-spacer"></div>
+      <button class="btn small primary" id="batchStart">启动选中</button>
+      <button class="btn small" id="batchStop">停止选中</button>
+      <button class="btn" id="batchCancel">取消</button>
+    </div>
+  </div>
+</div>
+
 <script src="renderer.js"></script>
 </body>
 </html>

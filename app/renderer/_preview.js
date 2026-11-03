@@ -59,6 +59,20 @@
           if (nav) nav.click();
         }, 120);
       }
+      if (q.get('mini')) {
+        const which = q.get('mini');
+        const card = document.querySelector('.dev-card');
+        const more = card && card.querySelector('.dev-more');
+        if (which === 'batch') {
+          const b = document.getElementById('btnBatchOp');
+          if (b) b.click();
+        } else if (more) {
+          more.click();
+          const act = which === 'backup' ? 'backup' : 'rename';
+          const b = document.querySelector(`#ctxMenu button[data-act="${act}"]`);
+          if (b) b.click();
+        }
+      }
       if (q.get('task')) {
         const el = document.getElementById('taskProgress');
         if (el) {
