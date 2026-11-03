@@ -25,6 +25,9 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('task:progress', h);
     return () => ipcRenderer.removeListener('task:progress', h);
   },
+  windows: {
+    arrange: (layout) => invoke('windows:arrange', layout),
+  },
   camera: {
     hosts: () => invoke('camera:hosts'),
     status: () => invoke('camera:status'),

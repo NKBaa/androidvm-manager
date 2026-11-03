@@ -645,6 +645,39 @@ body {
 }
 .batch-all input { accent-color: var(--acc); }
 
+/* ---------- 排列窗口 ---------- */
+.arrange-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.arrange-grid button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 6px 11px;
+  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--fg-2);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: .15s;
+}
+.arrange-grid button b {
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 400;
+  color: var(--fg-dim);
+}
+.arrange-grid button:hover {
+  border-color: var(--acc);
+  background: var(--acc-soft);
+  color: var(--fg);
+}
+.arrange-grid button:hover b { color: var(--acc); }
+
 
 /* ==================== SDK 缺失提示条 ==================== */
 .sdk-banner {

@@ -1719,8 +1719,33 @@ async function batchRun(ids, kind) {
   await refreshDevices();
 }
 
-$('btnArrange').addEventListener('click', () => {
-  toast('窗口排列：设备都在管理器内显示，无需排列');
+$('btnArrange').addEventListener('click', () => openArrangeDialog());
+
+function openArrangeDialog() {
+  const running = devCache.filter((d) => d.online).length;
+  $('arrangeHint').textContent = running ? `${running} 台设备运行中` : '当前没有运行中的设备';
+  $('arrangeDlg').style.display = 'flex';
+}
+
+function closeArrangeDialog() {
+  $('arrangeDlg').style.display = 'none';
+}
+
+document.querySelectorAll('#arrangeDlg .arrange-grid button').forEach((b) => {
+  b.addEventListener('click', async () => {
+    const layout = b.dataset.layout;
+    closeArrangeDialog();
+    toast('正在排列窗口…');
+    const r = await call(bridge.windows.arrange(layout), '排列窗口');
+    if (!r) return;
+    if (r.ok) toast(`已排列 ${r.arranged} 个窗口`, 'ok');
+    else toast(r.message || '没有可排列的窗口', 'err');
+  });
+});
+
+$('arrangeClose').addEventListener('click', closeArrangeDialog);
+$('arrangeDlg').addEventListener('click', (e) => {
+  if (e.target === $('arrangeDlg')) closeArrangeDialog();
 });
 
 $('btnSortMode').addEventListener('click', () => {

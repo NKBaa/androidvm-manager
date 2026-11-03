@@ -475,6 +475,65 @@ ipcMain.handle('instances:thumb', wrap(async (id) => {
   return { dataUrl: thumb.toDataURL(), width: size.width, height: size.height };
 }));
 
+// 排列窗口：把正在运行的模拟器原生窗口在桌面上排好
+function arrangeScriptPath() {
+  const cands = [];
+  if (conf.packaged && conf.resourcesPath) {
+    cands.push(path.join(conf.resourcesPath, 'scripts', 'arrange-windows.ps1'));
+  }
+  cands.push(path.join(__dirname, 'build', 'arrange-windows.ps1'));
+  for (const p of cands) {
+    try {
+      if (fs.existsSync(p)) return p;
+    } catch {}
+  }
+  return null;
+}
+
+ipcMain.handle('windows:arrange', wrap(async (layout) => {
+  const mode = ['grid', 'h', 'v', 'cascade'].includes(layout) ? layout : 'grid';
+  const reg = instances.load();
+
+  const pids = [];
+  const running = [];
+  for (const it of reg.list) {
+    try {
+      const vm = managerFor(it);
+      const st = await vm.status();
+      if (!st.running) continue;
+      running.push(it.name);
+      const pid = vm.findEmulatorPid();
+      if (pid) pids.push(pid);
+    } catch {}
+  }
+
+  if (!running.length) return { ok: false, arranged: 0, message: '没有正在运行的设备' };
+
+  const script = arrangeScriptPath();
+  if (!script) return { ok: false, arranged: 0, message: '找不到排列脚本 arrange-windows.ps1' };
+
+  const out = await new Promise((resolve, reject) => {
+    execFile(
+      'powershell',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-Pids', pids.join(','), '-Layout', mode],
+      { windowsHide: true, timeout: 25000 },
+      (err, stdout, stderr) => (err ? reject(new Error(String(stderr || err.message).trim())) : resolve(stdout))
+    );
+  });
+
+  const n = Number(String(out).trim()) || 0;
+  return {
+    ok: n > 0,
+    arranged: n,
+    running: running.length,
+    message:
+      n > 0
+        ? ''
+        : '没有找到可排列的窗口 —— 这些设备是以「隐藏窗口」模式运行的，' +
+          '到「设备设置 → 开发者选项」里关掉「后台运行」再启动才会出现原生窗口。',
+  };
+}));
+
 // 备份：把该实例的 userdata 镜像复制一份
 ipcMain.handle('instances:backup', wrap(async (id) => {
   const inst = instances.get(id);

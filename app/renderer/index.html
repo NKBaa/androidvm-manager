@@ -915,6 +915,29 @@
   </div>
 </div>
 
+<!-- ================= 排列窗口 ================= -->
+<div class="mini-mask" id="arrangeDlg" style="display:none">
+  <div class="mini">
+    <h3>排列窗口</h3>
+    <p class="mini-desc">
+      把正在运行的模拟器原生窗口在桌面上排好。<br />
+      <span class="mini-warn">只对「显示模拟器窗口」模式运行的设备有效</span>——
+      以隐藏模式运行的设备没有原生窗口。
+    </p>
+    <div class="arrange-grid">
+      <button data-layout="grid"><b>▦</b><span>平铺</span></button>
+      <button data-layout="h"><b>▥</b><span>横向</span></button>
+      <button data-layout="v"><b>▤</b><span>纵向</span></button>
+      <button data-layout="cascade"><b>▨</b><span>层叠</span></button>
+    </div>
+    <div class="mini-foot">
+      <span class="mini-desc" id="arrangeHint" style="margin:0"></span>
+      <div class="mini-spacer"></div>
+      <button class="btn" id="arrangeClose">关闭</button>
+    </div>
+  </div>
+</div>
+
 <script src="renderer.js"></script>
 </body>
 </html>

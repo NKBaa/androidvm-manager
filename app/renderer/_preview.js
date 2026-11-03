@@ -66,6 +66,9 @@
         if (which === 'batch') {
           const b = document.getElementById('btnBatchOp');
           if (b) b.click();
+        } else if (which === 'arrange') {
+          const b = document.getElementById('btnArrange');
+          if (b) b.click();
         } else if (more) {
           more.click();
           const act = which === 'backup' ? 'backup' : 'rename';

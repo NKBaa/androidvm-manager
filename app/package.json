@@ -50,6 +50,10 @@
         "to": "seed/avd/config.ini"
       },
       {
+        "from": "build/arrange-windows.ps1",
+        "to": "scripts/arrange-windows.ps1"
+      },
+      {
         "from": "../_data/supported_devices.csv",
         "to": "seed/_data/supported_devices.csv"
       },

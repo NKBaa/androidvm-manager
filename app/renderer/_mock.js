@@ -30,6 +30,7 @@
         vmRoot: 'C:\\Users\\me\\AppData\\Local\\Programs\\AndroidVM\\AndroidVM',
       }),
     onTaskProgress: () => () => {},
+    windows: { arrange: () => ok({ ok: true, arranged: 2, running: 2 }) },
     config: { get: () => ok(cfg), save: (c) => ok(c) },
     vm: {
       start: () => ok({}), stop: () => ok({}), restart: () => ok({}),
