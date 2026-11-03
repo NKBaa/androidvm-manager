@@ -14,6 +14,7 @@ exports.default = async function afterPack(context) {
 
   const exePath = path.join(context.appOutDir, 'AndroidVM.exe');
   const icoPath = path.join(__dirname, 'icon.ico');
+  const manifestPath = path.join(__dirname, 'app.manifest');
   const rcedit = path.join(__dirname, 'rcedit-x64.exe');
 
   if (!fs.existsSync(exePath)) {
@@ -39,11 +40,22 @@ exports.default = async function afterPack(context) {
     '--set-version-string', 'OriginalFilename', 'AndroidVM.exe',
   ];
   if (fs.existsSync(icoPath)) args.push('--set-icon', icoPath);
+  // 关键：替换成 requireAdministrator 清单，程序启动时由用户点 UAC 同意
+  if (fs.existsSync(manifestPath)) args.push('--application-manifest', manifestPath);
+  else console.warn('[afterPack] 找不到 app.manifest，exe 将不会强制提权');
 
   try {
     execFileSync(rcedit, args, { stdio: 'inherit', windowsHide: true });
-    console.log('[afterPack] 已写入图标与版本信息: ' + exePath);
+    console.log('[afterPack] 已写入图标、版本信息与管理员权限清单: ' + exePath);
   } catch (e) {
-    console.warn('[afterPack] rcedit 失败: ' + e.message);
+    // 清单写失败不能让图标和版本也丢掉 —— 去掉清单参数重试一次
+    console.warn('[afterPack] 带清单写入失败（' + e.message + '），改为只写图标与版本');
+    const fallback = args.filter((a, i) => a !== '--application-manifest' && args[i - 1] !== '--application-manifest');
+    try {
+      execFileSync(rcedit, fallback, { stdio: 'inherit', windowsHide: true });
+      console.warn('[afterPack] 已写入图标与版本，但**没有**应用管理员权限清单');
+    } catch (e2) {
+      console.warn('[afterPack] rcedit 失败: ' + e2.message);
+    }
   }
 };

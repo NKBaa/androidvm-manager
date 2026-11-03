@@ -19,13 +19,25 @@ const IN_ASAR = APP_DIR.includes('app.asar');
 function resolveVmRoot() {
   if (process.env.AVM_ROOT) return path.resolve(process.env.AVM_ROOT);
   if (IN_ASAR) {
-    // 便携版优先：exe 同级的 AndroidVM 目录；不可写则退回 LOCALAPPDATA
+    // 便携版：electron-builder 会把 exe 解压到临时目录再运行，
+    // 数据必须放在**用户放 portable exe 的位置**，否则会写进 %TEMP% 被清掉。
+    // PORTABLE_EXECUTABLE_DIR 由 portable 启动器注入。
+    const portableDir = process.env.PORTABLE_EXECUTABLE_DIR;
+    if (portableDir) {
+      const p = path.join(portableDir, 'AndroidVM');
+      try {
+        fs.mkdirSync(p, { recursive: true });
+        fs.accessSync(p, fs.constants.W_OK);
+        return p;
+      } catch {}
+    }
+    // 安装版：exe 同级的 AndroidVM 目录；不可写则退回 LOCALAPPDATA
     const exeDir = path.dirname(process.execPath);
-    const portable = path.join(exeDir, 'AndroidVM');
+    const near = path.join(exeDir, 'AndroidVM');
     try {
-      fs.mkdirSync(portable, { recursive: true });
-      fs.accessSync(portable, fs.constants.W_OK);
-      return portable;
+      fs.mkdirSync(near, { recursive: true });
+      fs.accessSync(near, fs.constants.W_OK);
+      return near;
     } catch {
       return path.join(process.env.LOCALAPPDATA || os.homedir(), 'AndroidVM');
     }

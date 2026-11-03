@@ -114,8 +114,15 @@
 
 下载 `AndroidVM-Setup-<ver>.exe` 或 `AndroidVM-Portable-<ver>.exe`（约 76 MB）。
 
+> ⚠️ **安装包和程序都要求管理员权限**，启动时会弹 UAC 让用户点「是」。
+> 这是因为要启动模拟器、读写 AVD 数据分区。安装版会装到
+> `C:\Program Files\AndroidVM\`，数据目录在同级的 `AndroidVM\` 下。
+
 安装包**不含 Android SDK**（约 5.4 GB），首次启动会自动查找 SDK；
 找不到时界面顶部会出现橙色提示条，点「选择 SDK 目录」选中即可。
+
+> 便携版的数据目录放在**便携版 exe 所在目录**的 `AndroidVM\` 下，
+> 不会写进临时目录（换机器时把 exe 和这个目录一起拷走即可）。
 
 ### 方式二：源码运行
 

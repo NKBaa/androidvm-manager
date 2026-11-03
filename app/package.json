@@ -83,16 +83,19 @@
     },
     "nsis": {
       "oneClick": false,
-      "perMachine": false,
+      "perMachine": true,
       "allowElevation": true,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Android 14 虚拟机管理器",
       "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
       "artifactName": "AndroidVM-Setup-${version}.${ext}"
     },
     "portable": {
+      "requestExecutionLevel": "admin",
       "artifactName": "AndroidVM-Portable-${version}.${ext}"
     }
   }
