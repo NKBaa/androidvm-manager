@@ -14,6 +14,7 @@ const wifi = require('./src/wifi');
 const bt = require('./src/bluetooth');
 const cell = require('./src/cellular');
 const instances = require('./src/instances');
+const sdkdownloader = require('./src/sdkdownloader');
 
 // ---------------------------------------------------------------
 // 多开：每个实例一个 VmManager，按需创建并缓存。
@@ -109,7 +110,7 @@ ipcMain.handle('app:info', wrap(async () => {
     sdkRoot: conf.sdkRoot,
     vmRoot: conf.vmRoot,
     packaged: conf.packaged,
-    sdkReady: conf.sdkReady,
+    sdkReady: sdkdownloader.checkSdk(conf.sdkRoot).ready,
     emulatorPath: conf.emulator,
     adbPath: conf.adb,
     avdName: inst.avdName,
@@ -130,6 +131,43 @@ ipcMain.handle('app:setSdkRoot', wrap(async (dir) => {
 ipcMain.handle('ui:pickSdkDir', wrap(async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'], title: '选择 Android SDK 目录（应包含 emulator 与 platform-tools）' });
   return r.canceled ? null : r.filePaths[0];
+}));
+
+// ---------- SDK 在线下载 ----------
+let sdkCancel = false;
+
+ipcMain.handle('sdk:check', wrap(async () => {
+  const r = sdkdownloader.checkSdk(conf.sdkRoot);
+  conf.sdkReady = r.ready;
+  return r;
+}));
+
+ipcMain.handle('sdk:cancel', wrap(async () => { sdkCancel = true; return { ok: true }; }));
+
+ipcMain.handle('sdk:download', wrap(async (opts) => {
+  sdkCancel = false;
+  const sdkRoot = (opts && opts.sdkRoot) || conf.sdkRoot;
+  const packages = (opts && opts.packages) || sdkdownloader.PRESETS.minimal;
+
+  const send = (o) => {
+    try { if (win && !win.isDestroyed()) win.webContents.send('sdk:progress', o); } catch {}
+  };
+
+  // 后台跑，立即返回，进度通过 sdk:progress 事件推给界面
+  sdkdownloader
+    .install({
+      sdkRoot,
+      packages,
+      onProgress: send,
+      isCancelled: () => sdkCancel,
+    })
+    .then((r) => {
+      conf.sdkReady = !!(r && r.ok);
+      send({ phase: 'complete', result: r });
+    })
+    .catch((e) => send({ phase: 'error', message: e && e.message ? e.message : String(e) }));
+
+  return { started: true, sdkRoot, packages };
 }));
 
 // ---------- 多开实例 ----------

@@ -73,24 +73,31 @@ start.bat
 
 ## 准备 Android SDK
 
-需要三个组件：
+**最简单：让程序自己下。**
 
-| 组件 | 大小 |
+首次启动若找不到 SDK，界面顶部会出现橙色提示条，点
+**「在线下载 SDK（约 1.9 GB）」**，程序会从 Google 官方源
+（`dl.google.com`）拉取并自动解压、校验 SHA-1，带实时进度条：
+
+| 组件 | 下载大小 |
 |---|---|
-| `emulator` | ≈ 1.1 GB |
-| `platform-tools` | ≈ 17 MB |
-| `system-images;android-34;google_apis;x86_64` | ≈ 4.3 GB |
+| `emulator` | ≈ 439 MB |
+| `platform-tools` | ≈ 8 MB |
+| `system-images;android-34;google_apis;x86_64` | ≈ 1491 MB |
+| **合计** | **≈ 1.9 GB**（解压后 ≈ 5.4 GB） |
 
-用官方 `sdkmanager` 安装：
+下载器直接解析官方仓库清单 XML，所以**永远拿到最新版本**，不需要 Java / sdkmanager。
+
+**也可以手动准备：**
+
+用官方 `sdkmanager`：
 
 ```bash
 sdkmanager "emulator" "platform-tools" "system-images;android-34;google_apis;x86_64"
 ```
 
 或直接使用 Android Studio 的 SDK（程序会自动从
-`%LOCALAPPDATA%\Android\Sdk` 找到）。
-
-也可以设环境变量指定：
+`%LOCALAPPDATA%\Android\Sdk` 找到），或设环境变量：
 
 ```powershell
 $env:AVM_SDK_ROOT = "D:\Android\Sdk"
@@ -98,7 +105,7 @@ $env:AVM_SDK_ROOT = "D:\Android\Sdk"
 
 > **为什么 SDK 不打包进安装包？**
 > 5.4 GB 超过 GitHub 单文件 2 GB 限制，也不适合放进仓库。
-> 用官方 `sdkmanager` 获取是最快、最新、也最稳妥的方式。
+> 官方源下载最快也最新。
 
 ---
 

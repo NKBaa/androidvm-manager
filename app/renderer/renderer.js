@@ -663,14 +663,110 @@ $('btnCellStatus').addEventListener('click', async () => showCell(await call(bri
 async function checkSdk() {
   const info = await call(bridge.info(), '读取信息', true);
   if (!info) return;
-  if (info.sdkReady) return;
+  const st = await call(bridge.sdk.check(), '检查 SDK', true);
+  const ready = st ? st.ready : info.sdkReady;
+  if (ready) return;
   const b = $('sdkBanner');
   if (!b) return;
   b.style.display = 'flex';
   $('sdkMsg').innerHTML =
     `未找到 Android SDK（当前解析路径：<code>${escapeHtml(info.sdkRoot || '')}</code>）` +
-    `，请选择包含 <code>emulator</code> 与 <code>platform-tools</code> 的目录`;
+    ` —— 可在线下载，或选择已有的 SDK 目录`;
 }
+
+// ---------- SDK 在线下载 ----------
+function fmtMB(n) {
+  return (n / 1024 / 1024).toFixed(0) + ' MB';
+}
+
+let sdkUnsub = null;
+
+function showSdkProgress(on) {
+  const el = $('sdkProgress');
+  if (!el) return;
+  el.style.display = on ? 'flex' : 'none';
+  if (!on) {
+    $('sdkBar').style.width = '0%';
+    $('sdkPct').textContent = '0%';
+  }
+}
+
+function onSdkProgress(d) {
+  const phase = d.phase;
+  if (phase === 'error') {
+    showSdkProgress(false);
+    $('sdkBanner').style.display = 'flex';
+    $('sdkMsg').textContent = 'SDK 下载失败：' + d.message;
+    toast('SDK 下载失败：' + d.message, 'err');
+    return;
+  }
+  if (phase === 'complete') {
+    showSdkProgress(false);
+    const r = d.result || {};
+    if (r.ok && r.emulator && r.adb) {
+      $('sdkBanner').style.display = 'none';
+      toast('SDK 安装完成，可以启动虚拟机了', 'ok');
+    } else {
+      $('sdkBanner').style.display = 'flex';
+      $('sdkMsg').textContent = 'SDK 安装不完整，请检查 emulator 与 platform-tools';
+      toast('SDK 安装不完整', 'err');
+    }
+    return;
+  }
+  if (phase === 'done') {
+    $('sdkPhase').textContent = '安装完成，校验中…';
+    $('sdkBar').style.width = '100%';
+    $('sdkPct').textContent = '100%';
+    return;
+  }
+  if (phase === 'download') {
+    $('sdkPhase').textContent = `${d.file}  ${fmtMB(d.received)} / ${fmtMB(d.total)}`;
+    const pct = d.overallPercent || 0;
+    $('sdkBar').style.width = pct.toFixed(1) + '%';
+    $('sdkPct').textContent = pct.toFixed(0) + '%';
+    return;
+  }
+  if (phase === 'resolve') { $('sdkPhase').textContent = d.message || '解析组件清单…'; return; }
+  if (phase === 'resolved') {
+    const n = (d.packages || []).length;
+    $('sdkPhase').textContent = `共 ${n} 个组件，合计 ${fmtMB(d.totalBytes || 0)}`;
+    return;
+  }
+  if (phase === 'download-start') { $('sdkPhase').textContent = '开始下载 ' + d.file; return; }
+  if (phase === 'verify') { $('sdkPhase').textContent = '校验 ' + d.package + ' …'; return; }
+  if (phase === 'extract') { $('sdkPhase').textContent = '解压 ' + d.package + ' …'; return; }
+  if (phase === 'package-done') {
+    const pct = d.overallPercent || 0;
+    $('sdkBar').style.width = pct.toFixed(1) + '%';
+    $('sdkPct').textContent = pct.toFixed(0) + '%';
+    return;
+  }
+}
+
+$('btnDownloadSdk').addEventListener('click', async () => {
+  const ok = window.confirm(
+    '将从 Google 官方源下载 Android SDK：\n\n' +
+      '  • emulator            约 439 MB\n' +
+      '  • platform-tools      约 8 MB\n' +
+      '  • Android 14 系统镜像  约 1491 MB\n\n' +
+      '合计约 1.9 GB，解压后约 5.4 GB。\n确定开始下载？'
+  );
+  if (!ok) return;
+  showSdkProgress(true);
+  $('sdkPhase').textContent = '准备中…';
+  if (!sdkUnsub) sdkUnsub = bridge.sdk.onProgress(onSdkProgress);
+  const r = await call(bridge.sdk.download({}), '开始下载', true);
+  if (!r) {
+    showSdkProgress(false);
+    toast('无法开始下载', 'err');
+  }
+});
+
+$('btnSdkCancel').addEventListener('click', async () => {
+  await call(bridge.sdk.cancel(), '取消下载', true);
+  showSdkProgress(false);
+  toast('已取消下载');
+});
 
 $('btnPickSdk').addEventListener('click', async () => {
   const dir = await call(bridge.pickSdkDir(), '选择目录', true);

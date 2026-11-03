@@ -7,6 +7,16 @@ contextBridge.exposeInMainWorld('api', {
   info: () => invoke('app:info'),
   setSdkRoot: (d) => invoke('app:setSdkRoot', d),
   pickSdkDir: () => invoke('ui:pickSdkDir'),
+  sdk: {
+    check: () => invoke('sdk:check'),
+    download: (o) => invoke('sdk:download', o),
+    cancel: () => invoke('sdk:cancel'),
+    onProgress: (cb) => {
+      const h = (_e, data) => cb(data);
+      ipcRenderer.on('sdk:progress', h);
+      return () => ipcRenderer.removeListener('sdk:progress', h);
+    },
+  },
   config: {
     get: () => invoke('config:get'),
     save: (c) => invoke('config:save', c),

@@ -12,7 +12,16 @@
   <div class="sdk-banner" id="sdkBanner" style="display:none">
     <span class="sdk-ico">⚠</span>
     <span class="sdk-msg" id="sdkMsg">未找到 Android SDK</span>
-    <button class="btn small primary" id="btnPickSdk">选择 SDK 目录</button>
+    <button class="btn small primary" id="btnDownloadSdk">在线下载 SDK（约 1.9 GB）</button>
+    <button class="btn small" id="btnPickSdk">选择已有 SDK</button>
+  </div>
+
+  <!-- SDK 下载进度 -->
+  <div class="sdk-progress" id="sdkProgress" style="display:none">
+    <span class="sdk-phase" id="sdkPhase">准备中…</span>
+    <div class="sdk-bar"><i id="sdkBar"></i></div>
+    <span class="sdk-pct" id="sdkPct">0%</span>
+    <button class="btn small" id="btnSdkCancel">取消</button>
   </div>
 
   <!-- ================= 顶栏 ================= -->
