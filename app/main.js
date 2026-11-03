@@ -2,6 +2,8 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
+const os = require('node:os');
+const { execFile } = require('node:child_process');
 const { conf } = require('./src/config');
 const { VmManager } = require('./src/vm');
 const adbmod = require('./src/adb');
@@ -210,8 +212,95 @@ ipcMain.handle('instances:list', wrap(async () => {
   for (const it of list) {
     it.online = online.some((d) => d.id === it.serial && d.state === 'device');
     it.booting = !!it.listening && !it.online;
+    // 设备卡片要展示的摘要信息
+    try {
+      const cfg = instances.loadState(it.id) || {};
+      it.summary = {
+        ram: cfg.ram || 4096,
+        cores: cfg.cores || 4,
+        diskGB: cfg.diskGB || 6,
+        width: (cfg.resolution && cfg.resolution.width) || 1080,
+        height: (cfg.resolution && cfg.resolution.height) || 2400,
+        density: (cfg.resolution && cfg.resolution.density) || 420,
+        image: cfg.image || 'google_apis',
+        root: !!cfg.root,
+        deviceKey: cfg.deviceKey || '',
+      };
+    } catch {
+      it.summary = null;
+    }
   }
   return { activeId: instances.load().activeId, list };
+}));
+
+// 磁盘清理：清掉应用缓存，释放空间
+ipcMain.handle('instances:clean', wrap(async (id) => {
+  await instances.setActive(id);
+  const out = await adbmod.shell('pm trim-caches 999G').catch((e) => '失败: ' + e.message);
+  return { ok: true, output: String(out || '') };
+}));
+
+// 备份：把该实例的 userdata 镜像复制一份
+ipcMain.handle('instances:backup', wrap(async (id) => {
+  const inst = instances.get(id);
+  if (!inst) throw new Error('实例不存在');
+  const avdDir = path.join(conf.avdHome, inst.avdName + '.avd');
+  const src = path.join(avdDir, 'userdata-qemu.img');
+  if (!fs.existsSync(src)) throw new Error('没有可备份的数据镜像（虚拟机可能还没运行过）');
+  const dstDir = path.join(conf.vmRoot, '_data', 'backups');
+  fs.mkdirSync(dstDir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+  const dst = path.join(dstDir, `${inst.id}-${stamp}.img`);
+  fs.copyFileSync(src, dst);
+  return { ok: true, file: dst, bytes: fs.statSync(dst).size };
+}));
+
+ipcMain.handle('instances:backups', wrap(async (id) => {
+  const dir = path.join(conf.vmRoot, '_data', 'backups');
+  try {
+    return fs
+      .readdirSync(dir)
+      .filter((f) => f.startsWith(id + '-') && f.endsWith('.img'))
+      .map((f) => ({ file: f, path: path.join(dir, f), bytes: fs.statSync(path.join(dir, f)).size, mtime: fs.statSync(path.join(dir, f)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime);
+  } catch {
+    return [];
+  }
+}));
+
+ipcMain.handle('instances:restore', wrap(async (id, file) => {
+  const inst = instances.get(id);
+  if (!inst) throw new Error('实例不存在');
+  const src = path.join(conf.vmRoot, '_data', 'backups', path.basename(file));
+  if (!fs.existsSync(src)) throw new Error('备份文件不存在');
+  const dst = path.join(conf.avdHome, inst.avdName + '.avd', 'userdata-qemu.img');
+  fs.copyFileSync(src, dst);
+  return { ok: true, file: dst };
+}));
+
+// 创建桌面快捷方式
+ipcMain.handle('instances:shortcut', wrap(async (id) => {
+  const inst = instances.get(id);
+  if (!inst) throw new Error('实例不存在');
+  const desktop = path.join(os.homedir(), 'Desktop');
+  if (!fs.existsSync(desktop)) throw new Error('找不到桌面目录');
+  const target = process.execPath;
+  const workDir = path.dirname(target);
+  const lnk = path.join(desktop, `${inst.name}.lnk`);
+  const ps = [
+    '$s=(New-Object -ComObject WScript.Shell).CreateShortcut(' + JSON.stringify(lnk) + ');',
+    '$s.TargetPath=' + JSON.stringify(target) + ';',
+    '$s.WorkingDirectory=' + JSON.stringify(workDir) + ';',
+    '$s.IconLocation=' + JSON.stringify(target + ',0') + ';',
+    '$s.Description=' + JSON.stringify('Android 14 虚拟机 · ' + inst.name) + ';',
+    '$s.Save();',
+  ].join(' ');
+  await new Promise((resolve, reject) => {
+    execFile('powershell', ['-NoProfile', '-Command', ps], { windowsHide: true, timeout: 20000 }, (err, so, se) =>
+      err ? reject(new Error(se || err.message)) : resolve(true)
+    );
+  });
+  return { ok: true, file: lnk };
 }));
 ipcMain.handle('instances:create', wrap(async (opts) => {
   const inst = await instances.create(opts || {});

@@ -49,6 +49,11 @@ contextBridge.exposeInMainWorld('api', {
     rename: (id, name) => invoke('instances:rename', id, name),
     setActive: (id) => invoke('instances:setActive', id),
     active: () => invoke('instances:active'),
+    clean: (id) => invoke('instances:clean', id),
+    backup: (id) => invoke('instances:backup', id),
+    backups: (id) => invoke('instances:backups', id),
+    restore: (id, file) => invoke('instances:restore', id, file),
+    shortcut: (id) => invoke('instances:shortcut', id),
   },
   net: {
     apply: (n) => invoke('net:apply', n),

@@ -39,15 +39,22 @@
       list: () => ok({
         activeId: 'main',
         list: [
-          { id: 'main', name: '主实例', avdName: 'A14_Root', port: 5554, serial: 'emulator-5554', active: true, online: true, listening: true },
-          { id: 'work', name: '工作机', avdName: 'A14_Root_2', port: 5556, serial: 'emulator-5556', active: false, online: true, listening: true },
-          { id: 'test', name: '测试实例', avdName: 'A14_Root_3', port: 5558, serial: 'emulator-5558', active: false, online: false, listening: false },
+          { id: 'main', name: '主实例', avdName: 'A14_Root', port: 5554, serial: 'emulator-5554', active: true, online: true, listening: true, summary: { ram: 4096, cores: 4, diskGB: 6, width: 1080, height: 2400, density: 420, root: true } },
+          { id: 'work', name: '工作机', avdName: 'A14_Root_2', port: 5556, serial: 'emulator-5556', active: false, online: true, listening: true, summary: { ram: 6144, cores: 6, diskGB: 8, width: 1440, height: 3200, density: 560, root: true } },
+          { id: 'test', name: '测试实例', avdName: 'A14_Root_3', port: 5558, serial: 'emulator-5558', active: false, online: false, listening: false, summary: { ram: 2048, cores: 2, diskGB: 4, width: 720, height: 1280, density: 320, root: false } },
         ],
       }),
       create: () => ok({ id: 'x', name: '新实例', avdName: 'A14_Root_4', port: 5560 }),
       remove: () => ok({}), rename: () => ok({}),
       setActive: (id) => ok({ id, name: id === 'work' ? '工作机' : '主实例' }),
       active: () => ok({ id: 'main', name: '主实例' }),
+      clean: () => ok({ ok: true, output: '' }),
+      backup: () => ok({ ok: true, file: 'x.img', bytes: 4.2 * 1024 * 1024 * 1024 }),
+      backups: () => ok([
+        { file: 'main-20261103210000.img', path: 'a', bytes: 4.2 * 1024 * 1024 * 1024, mtime: Date.now() },
+      ]),
+      restore: () => ok({ ok: true }),
+      shortcut: () => ok({ ok: true, file: 'C:\\Users\\me\\Desktop\\主实例.lnk' }),
     },
     net: {
       apply: () => ok({ speed: 'OK' }), status: () => ok({ console: 'full speed', networkType: 'LTE' }),

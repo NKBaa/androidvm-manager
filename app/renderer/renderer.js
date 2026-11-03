@@ -892,6 +892,7 @@ $('btnCellStatus').addEventListener('click', async () => showCell(await call(bri
 
 // ---------- SDK 检查（安装包首次运行常见） ----------
 let sdkMirrorsLoaded = false;
+let appInfo = null;
 
 async function loadSdkMirrors() {
   if (sdkMirrorsLoaded) return;
@@ -912,6 +913,7 @@ async function loadSdkMirrors() {
 async function checkSdk() {
   const info = await call(bridge.info(), '读取信息', true);
   if (!info) return;
+  appInfo = info;
   const st = await call(bridge.sdk.check(), '检查 SDK', true);
   const ready = st ? st.ready : info.sdkReady;
   if (ready) return;
@@ -1053,17 +1055,475 @@ $('btnPickSdk').addEventListener('click', async () => {
   if (r) toast('已保存 SDK 路径，重启应用后生效', 'ok');
 });
 
+// ==================== 视图切换 ====================
+let currentView = 'launcher';
+
+function switchView(v) {
+  currentView = v;
+  const launcher = $('viewLauncher');
+  const workspace = $('viewWorkspace');
+  if (!launcher || !workspace) return;
+  launcher.hidden = v !== 'launcher';
+  workspace.hidden = v !== 'workspace';
+  document.querySelectorAll('.rail-btn[data-view]').forEach((b) => {
+    b.classList.toggle('active', b.dataset.view === v);
+  });
+}
+
+document.querySelectorAll('.rail-btn[data-view]').forEach((b) => {
+  b.addEventListener('click', () => switchView(b.dataset.view));
+});
+
+// ==================== 设备网格 ====================
+let devCache = [];
+let devActiveId = null;
+let devViewMode = 'grid';
+let devSortMode = 'default';
+let devQuery = '';
+let ctxTarget = null;
+
+function devStatusOf(it) {
+  if (it.online) return { text: '运行中', running: true };
+  if (it.listening || it.booting) return { text: '启动中', running: false };
+  return { text: '未开机', running: false };
+}
+
+function renderDeviceGrid() {
+  const box = $('deviceGrid');
+  if (!box) return;
+  box.className = 'device-grid' + (devViewMode === 'list' ? ' list' : '');
+
+  let list = devCache.slice();
+  if (devQuery) {
+    const q = devQuery.toLowerCase();
+    list = list.filter(
+      (it) => (it.name || '').toLowerCase().includes(q) || (it.serial || '').toLowerCase().includes(q)
+    );
+  }
+  if (devSortMode === 'name') list.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+  else if (devSortMode === 'status') list.sort((a, b) => Number(b.online) - Number(a.online));
+
+  if (!list.length) {
+    box.innerHTML = `<div class="dev-empty">${devQuery ? '没有匹配的设备' : '还没有设备，点左上角「＋ 新建设备」创建'}</div>`;
+    return;
+  }
+
+  box.innerHTML = '';
+  list.forEach((it, i) => {
+    const st = devStatusOf(it);
+    const s = it.summary || {};
+    const el = document.createElement('div');
+    el.className = 'dev-card' + (st.running ? ' running' : '');
+    el.dataset.id = it.id;
+    el.innerHTML =
+      `<div class="dev-thumb">
+         <span class="dev-index">#${i}</span>
+         <div class="dev-thumb-ph">
+           <svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><line x1="10" y1="18.5" x2="14" y2="18.5"/></svg>
+           <span>${st.text}</span>
+         </div>
+       </div>
+       <div class="dev-info">
+         <div class="dev-text">
+           <div class="dev-name">${escapeHtml(it.name)}</div>
+           <div class="dev-tags">
+             <span class="tag">Android 14</span>
+             <span class="tag">${s.cores || 4} 核</span>
+             <span class="tag">${Math.round((s.ram || 4096) / 1024)} GB</span>
+             ${s.root ? '<span class="tag">Root</span>' : ''}
+           </div>
+           <div class="dev-meta">${s.width || 1080} × ${s.height || 2400} | ${s.density || 420} DPI</div>
+         </div>
+         <div class="dev-actions">
+           <button class="dev-play${st.running ? ' stop' : ''}" title="${st.running ? '停止' : '启动'}">
+             ${
+               st.running
+                 ? '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>'
+                 : '<svg viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg>'
+             }
+           </button>
+           <button class="dev-more" title="更多操作">
+             <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg>
+           </button>
+         </div>
+       </div>`;
+
+    el.addEventListener('click', async (e) => {
+      if (e.target.closest('.dev-play') || e.target.closest('.dev-more')) return;
+      await openWorkspace(it.id);
+    });
+    el.querySelector('.dev-play').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await toggleDevice(it);
+    });
+    el.querySelector('.dev-more').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openCtxMenu(e.clientX, e.clientY, it);
+    });
+    el.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      openCtxMenu(e.clientX, e.clientY, it);
+    });
+    box.appendChild(el);
+  });
+}
+
+async function refreshDevices() {
+  const r = await call(bridge.instances.list(), '读取设备', true);
+  if (!r) return;
+  devCache = r.list || [];
+  devActiveId = r.activeId;
+  renderDeviceGrid();
+}
+
+async function toggleDevice(it) {
+  const st = devStatusOf(it);
+  if (it.id !== devActiveId) {
+    const sw = await call(bridge.instances.setActive(it.id), '切换实例');
+    if (!sw) return;
+    devActiveId = it.id;
+    await loadConfig();
+  }
+  if (st.running) await call(bridge.vm.stop(), '停止虚拟机');
+  else await call(bridge.vm.start({}), '启动虚拟机');
+  await refreshDevices();
+  await refreshStatus();
+}
+
+async function openWorkspace(id) {
+  if (id && id !== devActiveId) {
+    const sw = await call(bridge.instances.setActive(id), '切换实例');
+    if (!sw) return;
+    devActiveId = id;
+    await loadConfig();
+  }
+  switchView('workspace');
+  await refreshStatus();
+}
+
+// ---------- 卡片右键菜单 ----------
+function openCtxMenu(x, y, it) {
+  ctxTarget = it;
+  const m = $('ctxMenu');
+  if (!m) return;
+  m.style.display = 'block';
+  const w = m.offsetWidth || 210;
+  const h = m.offsetHeight || 300;
+  m.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
+  m.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
+}
+
+function closeCtxMenu() {
+  const m = $('ctxMenu');
+  if (m) m.style.display = 'none';
+}
+
+document.addEventListener('click', (e) => {
+  const m = $('ctxMenu');
+  if (m && !m.contains(e.target)) closeCtxMenu();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeCtxMenu();
+});
+window.addEventListener('resize', closeCtxMenu);
+
+$('ctxMenu').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const act = btn.dataset.act;
+  const it = ctxTarget;
+  closeCtxMenu();
+  if (it) await handleCtxAction(act, it);
+});
+
+async function handleCtxAction(act, it) {
+  switch (act) {
+    case 'settings':
+      await openDevSettings(it);
+      break;
+
+    case 'clean': {
+      if (!it.online) return toast('设备未运行，无法清理缓存', 'err');
+      const ok = window.confirm(`清理「${it.name}」的应用缓存？\n\n只会删除各应用的缓存文件，不会动数据。`);
+      if (!ok) return;
+      if (it.id !== devActiveId) {
+        await call(bridge.instances.setActive(it.id), '切换实例');
+        devActiveId = it.id;
+      }
+      const r = await call(bridge.instances.clean(it.id), '清理缓存');
+      if (r) toast('缓存已清理', 'ok');
+      break;
+    }
+
+    case 'rename': {
+      const name = window.prompt('重命名设备', it.name);
+      if (!name || name === it.name) return;
+      const r = await call(bridge.instances.rename(it.id, name), '重命名');
+      if (r) {
+        toast('已重命名', 'ok');
+        await refreshDevices();
+      }
+      break;
+    }
+
+    case 'clone': {
+      const r = await call(bridge.instances.create({ name: it.name + ' 副本', fromId: it.id }), '复制设备');
+      if (r) {
+        toast('已复制为新设备', 'ok');
+        await refreshDevices();
+      }
+      break;
+    }
+
+    case 'backup':
+      await openBackupDialog(it);
+      break;
+
+    case 'shortcut': {
+      const r = await call(bridge.instances.shortcut(it.id), '创建快捷方式');
+      if (r) toast('已在桌面创建快捷方式', 'ok');
+      break;
+    }
+
+    case 'delete': {
+      const ok = window.confirm(`删除「${it.name}」？\n\n该设备的数据分区会一并删除，不可恢复。`);
+      if (!ok) return;
+      const r = await call(bridge.instances.remove(it.id), '删除设备');
+      if (r) {
+        toast('已删除', 'ok');
+        await refreshDevices();
+      }
+      break;
+    }
+  }
+}
+
+// ---------- 备份与还原 ----------
+async function openBackupDialog(it) {
+  const list = await call(bridge.instances.backups(it.id), '读取备份', true);
+  const lines = (list || [])
+    .slice(0, 8)
+    .map((b, i) => `${i + 1}. ${b.file.replace(/\.img$/, '')}  (${(b.bytes / 1024 / 1024 / 1024).toFixed(2)} GB)`)
+    .join('\n');
+  const tip =
+    `「${it.name}」的备份\n\n` +
+    (list && list.length ? `已有备份：\n${lines}\n\n` : '还没有备份。\n\n') +
+    '输入序号还原某个备份，直接回车则创建新备份。';
+
+  const ans = window.prompt(tip, '');
+  if (ans === null) return;
+
+  const n = parseInt(ans, 10);
+  if (Number.isFinite(n) && n >= 1 && list && list[n - 1]) {
+    const ok = window.confirm('还原会覆盖当前数据分区，且需要先关闭虚拟机。继续？');
+    if (!ok) return;
+    const r = await call(bridge.instances.restore(it.id, list[n - 1].file), '还原备份');
+    if (r) toast('已还原，重新启动虚拟机生效', 'ok');
+    return;
+  }
+
+  toast('正在备份数据分区，请稍候…');
+  const r = await call(bridge.instances.backup(it.id), '备份');
+  if (r) toast(`备份完成（${(r.bytes / 1024 / 1024 / 1024).toFixed(2)} GB）`, 'ok');
+}
+
+// ==================== 设备设置弹窗 ====================
+let dlgTarget = null;
+
+const RES_PRESETS = [
+  ['720x1280', '720 × 1280'],
+  ['1080x1920', '1080 × 1920'],
+  ['1080x2400', '1080 × 2400'],
+  ['1440x2560', '1440 × 2560'],
+  ['1440x3200', '1440 × 3200'],
+  ['2160x3840', '2160 × 3840'],
+];
+
+function fillDevSettings() {
+  const c = config || {};
+  const gpu = (c.gpu && c.gpu.mode) || 'host';
+  $('dsGpu').value = ['host', 'angle_indirect', 'swiftshader_indirect'].includes(gpu) ? gpu : 'host';
+  $('dsCores').value = String(c.cores || 4);
+  $('dsRam').value = String(c.ram || 4096);
+
+  const res = c.resolution || { width: 1080, height: 2400, density: 420 };
+  const key = `${res.width}x${res.height}`;
+  $('dsRes').innerHTML = RES_PRESETS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+  if (!RES_PRESETS.some(([v]) => v === key)) {
+    $('dsRes').insertAdjacentHTML('afterbegin', `<option value="${key}">${res.width} × ${res.height}（当前）</option>`);
+  }
+  $('dsRes').value = key;
+  $('dsDpi').value = res.density || 420;
+
+  const au = c.audio || {};
+  $('dsAudioOut').checked = au.output !== false;
+  $('dsAudioIn').checked = au.input !== false;
+
+  $('dsNet').innerHTML = NET_PRESETS.map(([k, label]) => `<option value="${k}">${label}</option>`).join('');
+  $('dsNet').value = (c.network && c.network.profile) || 'wifi';
+  $('dsProxy').checked = !!(c.proxy && c.proxy.enabled);
+
+  $('dsModel').innerHTML = DEVICES.map(([k, n]) => `<option value="${k}">${n}</option>`).join('');
+  $('dsModel').value = c.deviceKey || 'pixel_7';
+  $('dsIdentity').textContent = c.deviceKey || '—';
+
+  $('dsRoot').checked = c.root !== false;
+  $('dsWritable').checked = c.writableSystem !== false;
+  $('dsHidden').checked = c.window === 'hidden';
+
+  $('dsDisk').value = String(c.diskGB || 6);
+  $('dsSnapshot').checked = !!c.snapshot;
+  $('dsLogDir').textContent = appInfo && appInfo.vmRoot ? appInfo.vmRoot + '\\logs' : '—';
+}
+
+$('dsOpenLog').addEventListener('click', () => {
+  call(bridge.vm.openLogDir(), '打开日志目录', true);
+});
+
+async function openDevSettings(it) {
+  dlgTarget = it;
+  if (it.id !== devActiveId) {
+    const sw = await call(bridge.instances.setActive(it.id), '切换实例');
+    if (!sw) return;
+    devActiveId = it.id;
+    await loadConfig();
+  }
+  $('dlgDevName').textContent = `${it.name} · 设备设置`;
+  fillDevSettings();
+  $('devSettings').style.display = 'flex';
+  selectDlgSection('perf');
+}
+
+function closeDevSettings() {
+  $('devSettings').style.display = 'none';
+  dlgTarget = null;
+}
+
+function selectDlgSection(sec) {
+  document.querySelectorAll('.dlg-nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.sec === sec));
+  document.querySelectorAll('.dlg-sec').forEach((s) => s.classList.toggle('active', s.dataset.sec === sec));
+  const btn = document.querySelector(`.dlg-nav-btn[data-sec="${sec}"]`);
+  $('dlgTitle').textContent = btn ? btn.querySelector('span').textContent : '';
+}
+
+$('dlgNav').addEventListener('click', (e) => {
+  const b = e.target.closest('.dlg-nav-btn');
+  if (b) selectDlgSection(b.dataset.sec);
+});
+$('btnDevSetClose').addEventListener('click', closeDevSettings);
+$('btnDevSetCancel').addEventListener('click', closeDevSettings);
+$('devSettings').addEventListener('click', (e) => {
+  if (e.target === $('devSettings')) closeDevSettings();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && $('devSettings').style.display === 'flex') closeDevSettings();
+});
+
+$('btnDevSetSave').addEventListener('click', async () => {
+  if (!config) return toast('配置还没加载完成', 'err');
+  const [w, h] = $('dsRes').value.split('x').map(Number);
+  config.gpu = { mode: $('dsGpu').value, renderer: $('dsGpu').value, enabled: true };
+  config.cores = Number($('dsCores').value);
+  config.ram = Number($('dsRam').value);
+  config.resolution = { width: w, height: h, density: Number($('dsDpi').value) || 420 };
+  config.audio = { output: $('dsAudioOut').checked, input: $('dsAudioIn').checked, host: true };
+  config.network = { ...(config.network || {}), profile: $('dsNet').value };
+  config.proxy = { ...(config.proxy || {}), enabled: $('dsProxy').checked };
+  config.deviceKey = $('dsModel').value;
+  config.root = $('dsRoot').checked;
+  config.writableSystem = $('dsWritable').checked;
+  config.window = $('dsHidden').checked ? 'hidden' : 'visible';
+  config.diskGB = Number($('dsDisk').value);
+  config.snapshot = $('dsSnapshot').checked;
+
+  const r = await call(bridge.config.save(config), '保存配置');
+  if (r) {
+    toast('设置已保存，重启虚拟机后生效', 'ok');
+    closeDevSettings();
+    await refreshDevices();
+  }
+});
+
+$('btnRailSettings').addEventListener('click', () => {
+  const it = devCache.find((d) => d.id === devActiveId) || devCache[0];
+  if (!it) return toast('还没有设备', 'err');
+  openDevSettings(it);
+});
+
+// ---------- 启动器工具栏 ----------
+$('btnNewDevice').addEventListener('click', async () => {
+  const r = await call(bridge.instances.create({}), '新建设备');
+  if (r) {
+    toast('已创建新设备', 'ok');
+    await refreshDevices();
+  }
+});
+
+$('btnBatchOp').addEventListener('click', () => {
+  const running = devCache.filter((d) => d.online).length;
+  const ans = window.prompt(
+    `批量操作\n\n共 ${devCache.length} 台设备，其中 ${running} 台运行中。\n\n输入数字：\n1 = 全部启动\n2 = 全部停止\n3 = 刷新状态`,
+    ''
+  );
+  if (!ans) return;
+  if (ans.trim() === '1') batchAll('start');
+  else if (ans.trim() === '2') batchAll('stop');
+  else refreshDevices();
+});
+
+async function batchAll(kind) {
+  for (const it of devCache) {
+    const st = devStatusOf(it);
+    if (kind === 'start' && !st.running) {
+      await call(bridge.instances.setActive(it.id), '切换实例', true);
+      await call(bridge.vm.start({}), `启动 ${it.name}`, true);
+    } else if (kind === 'stop' && st.running) {
+      await call(bridge.instances.setActive(it.id), '切换实例', true);
+      await call(bridge.vm.stop(), `停止 ${it.name}`, true);
+    }
+  }
+  toast(kind === 'start' ? '已下发启动指令' : '已下发停止指令', 'ok');
+  await refreshDevices();
+}
+
+$('btnArrange').addEventListener('click', () => {
+  toast('窗口排列：设备都在管理器内显示，无需排列');
+});
+
+$('btnSortMode').addEventListener('click', () => {
+  devSortMode = devSortMode === 'default' ? 'name' : devSortMode === 'name' ? 'status' : 'default';
+  const label = { default: '默认顺序', name: '按名称', status: '运行中优先' }[devSortMode];
+  toast('排序：' + label);
+  renderDeviceGrid();
+});
+
+document.querySelectorAll('.vt-btn').forEach((b) => {
+  b.addEventListener('click', () => {
+    devViewMode = b.dataset.mode;
+    document.querySelectorAll('.vt-btn').forEach((x) => x.classList.toggle('active', x === b));
+    renderDeviceGrid();
+  });
+});
+
+$('devSearch').addEventListener('input', (e) => {
+  devQuery = e.target.value.trim();
+  renderDeviceGrid();
+});
+
 // ---------- 初始化 ----------
 (async function init() {
   await checkSdk();
   buildPresets();
   await refreshInstances();
+  await refreshDevices();
   await loadConfig();
   await refreshCamData();
   await refreshStatus();
+  switchView('launcher');
   statusTimer = setInterval(async () => {
     await refreshStatus();
     await refreshInstances();
+    await refreshDevices();
   }, 4000);
 })();
 })();

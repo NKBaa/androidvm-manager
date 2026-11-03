@@ -25,6 +25,55 @@
     <button class="btn small" id="btnSdkCancel">取消</button>
   </div>
 
+  <div class="shell">
+    <!-- ================= 左侧图标栏 ================= -->
+    <nav class="rail">
+      <div class="rail-logo" title="AndroidVM"><span>▶</span></div>
+      <button class="rail-btn active" data-view="launcher" title="设备列表">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        <span>设备</span>
+      </button>
+      <button class="rail-btn" data-view="workspace" title="运行窗口">
+        <svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><line x1="10" y1="18.5" x2="14" y2="18.5"/></svg>
+        <span>运行</span>
+      </button>
+      <div class="rail-spacer"></div>
+      <button class="rail-btn" id="btnRailSettings" title="设置">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></svg>
+        <span>设置</span>
+      </button>
+    </nav>
+
+    <div class="main">
+      <!-- ================= 启动器：设备网格 ================= -->
+      <section class="view" id="viewLauncher">
+        <header class="launcher-bar">
+          <button class="btn primary" id="btnNewDevice">＋ 新建设备</button>
+          <button class="btn" id="btnBatchOp">批量操作</button>
+          <button class="btn" id="btnArrange">排列窗口</button>
+          <div class="lb-spacer"></div>
+          <div class="lb-search">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+            <input id="devSearch" placeholder="搜索设备" />
+          </div>
+          <button class="icon-btn" id="btnSortMode" title="切换排序">
+            <svg viewBox="0 0 24 24"><path d="M4 7h16M7 12h10M10 17h4"/></svg>
+          </button>
+          <div class="view-toggle">
+            <button class="vt-btn active" data-mode="grid" title="网格视图">
+              <svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+            </button>
+            <button class="vt-btn" data-mode="list" title="列表视图">
+              <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+          </div>
+        </header>
+        <div class="device-grid" id="deviceGrid"></div>
+      </section>
+
+      <!-- ================= 工作区 ================= -->
+      <section class="view" id="viewWorkspace" hidden>
+
   <!-- ================= 顶栏 ================= -->
   <header class="topbar">
     <div class="brand">
@@ -503,6 +552,10 @@
     </aside>
   </div>
 
+      </section>
+    </div>
+  </div>
+
   <!-- ================= 底部状态栏 ================= -->
   <footer class="statusbar">
     <span class="sb-item"><i class="sb-dot" id="sbDot"></i><span id="sbState">未启动</span></span>
@@ -524,6 +577,284 @@
   <div class="region-stage" id="regionStage">
     <img id="regionImg" alt="" />
     <div class="region-sel" id="regionSel" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ================= 设备卡片菜单 ================= -->
+<div class="ctx-menu" id="ctxMenu" style="display:none">
+  <button data-act="settings">
+    <svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><circle cx="12" cy="9" r="2.2"/><path d="M8.5 16.5c.6-1.6 2-2.4 3.5-2.4s2.9.8 3.5 2.4"/></svg>
+    设备设置
+  </button>
+  <button data-act="clean">
+    <svg viewBox="0 0 24 24"><path d="M4 8h16M6.5 8l1 12h9l1-12"/><path d="M9.5 8V5h5v3"/></svg>
+    磁盘清理
+  </button>
+  <button data-act="rename">
+    <svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16z"/><path d="M14 6l4 4"/></svg>
+    重命名
+  </button>
+  <button data-act="clone">
+    <svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+    复制
+  </button>
+  <button data-act="backup">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+    备份与还原
+  </button>
+  <button data-act="shortcut">
+    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 9h18"/><path d="M14 16l2.5-2.5M16.5 13.5h-3.5v3.5" stroke-linejoin="round"/></svg>
+    创建桌面快捷方式
+  </button>
+  <div class="ctx-sep"></div>
+  <button data-act="delete" class="danger">
+    <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7"/><path d="M6.5 7l1 13h9l1-13"/></svg>
+    删除
+  </button>
+</div>
+
+<!-- ================= 设备设置弹窗 ================= -->
+<div class="dlg-mask" id="devSettings" style="display:none">
+  <div class="dlg">
+    <header class="dlg-head">
+      <span id="dlgDevName">设备设置</span>
+      <button class="icon-btn" id="btnDevSetClose" title="关闭">✕</button>
+    </header>
+    <div class="dlg-body">
+      <nav class="dlg-nav" id="dlgNav">
+        <button class="dlg-nav-btn active" data-sec="perf">
+          <svg viewBox="0 0 24 24"><path d="M3 15l4-5 3 3 4-6 3 4 4-5"/></svg><span>性能</span>
+        </button>
+        <button class="dlg-nav-btn" data-sec="display">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><span>显示</span>
+        </button>
+        <button class="dlg-nav-btn" data-sec="sound">
+          <svg viewBox="0 0 24 24"><path d="M4 9.5h3L12 5v14l-5-4.5H4z"/><path d="M16 9a4.5 4.5 0 0 1 0 6"/></svg><span>声音</span>
+        </button>
+        <button class="dlg-nav-btn" data-sec="net">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.5 2.5 14.5 0 17M12 3.5c-2.5 2.5-2.5 14.5 0 17"/></svg><span>网络</span>
+        </button>
+        <button class="dlg-nav-btn" data-sec="model">
+          <svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><line x1="10" y1="18.5" x2="14" y2="18.5"/></svg><span>机型</span>
+        </button>
+        <button class="dlg-nav-btn" data-sec="dev">
+          <svg viewBox="0 0 24 24"><path d="M8 8 3.5 12 8 16M16 8l4.5 4L16 16"/><path d="M13.5 5.5 10.5 18.5"/></svg><span>开发者选项</span>
+        </button>
+        <button class="dlg-nav-btn" data-sec="other">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>其他</span>
+        </button>
+      </nav>
+
+      <div class="dlg-content" id="dlgContent">
+        <h2 class="dlg-title" id="dlgTitle">性能</h2>
+
+        <div class="dlg-sec active" data-sec="perf">
+          <div class="set-row">
+            <div class="set-ico"><svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="13" rx="2"/><path d="M7 21h10"/></svg></div>
+            <div class="set-main">
+              <div class="set-label">显卡渲染模式</div>
+              <div class="set-desc">画面异常或启动失败时可尝试切换渲染模式</div>
+            </div>
+            <div class="set-ctrl">
+              <select id="dsGpu">
+                <option value="host">自动（硬件加速）</option>
+                <option value="angle_indirect">ANGLE 模式</option>
+                <option value="swiftshader_indirect">软件渲染（兼容性最好）</option>
+              </select>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-ico"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></div>
+            <div class="set-main">
+              <div class="set-label">CPU 核心数</div>
+              <div class="set-desc">分配越多核心，多任务越流畅，但占用宿主机资源也越多</div>
+            </div>
+            <div class="set-ctrl">
+              <select id="dsCores">
+                <option value="2">2 核</option>
+                <option value="4">4 核</option>
+                <option value="6">6 核</option>
+                <option value="8">8 核</option>
+              </select>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-ico"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M7 11v2M11 11v2"/></svg></div>
+            <div class="set-main">
+              <div class="set-label">内存大小</div>
+              <div class="set-desc">大型游戏建议 6 GB 以上</div>
+            </div>
+            <div class="set-ctrl">
+              <select id="dsRam">
+                <option value="2048">2 GB</option>
+                <option value="3072">3 GB</option>
+                <option value="4096">4 GB</option>
+                <option value="6144">6 GB</option>
+                <option value="8192">8 GB</option>
+                <option value="12288">12 GB</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="dlg-sec" data-sec="display">
+          <div class="set-row">
+            <div class="set-ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></div>
+            <div class="set-main">
+              <div class="set-label">分辨率</div>
+              <div class="set-desc">修改后需重启虚拟机生效</div>
+            </div>
+            <div class="set-ctrl"><select id="dsRes"></select></div>
+          </div>
+          <div class="set-row">
+            <div class="set-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/></svg></div>
+            <div class="set-main">
+              <div class="set-label">屏幕 DPI</div>
+              <div class="set-desc">数值越大界面元素越大</div>
+            </div>
+            <div class="set-ctrl"><input type="number" id="dsDpi" min="120" max="640" step="10" class="set-num" /></div>
+          </div>
+        </div>
+
+        <div class="dlg-sec" data-sec="sound">
+          <div class="set-row">
+            <div class="set-ico"><svg viewBox="0 0 24 24"><path d="M4 9.5h3L12 5v14l-5-4.5H4z"/><path d="M16 9a4.5 4.5 0 0 1 0 6"/></svg></div>
+            <div class="set-main">
+              <div class="set-label">声音输出到主机</div>
+              <div class="set-desc">关闭后虚拟机内部仍可播放，但听不到声音</div>
+            </div>
+            <div class="set-ctrl">
+              <label class="sw"><input type="checkbox" id="dsAudioOut" /><i></i></label>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-ico"><svg viewBox="0 0 24 24"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></div>
+            <div class="set-main">
+              <div class="set-label">麦克风输入</div>
+              <div class="set-desc">允许虚拟机使用宿主机的麦克风</div>
+            </div>
+            <div class="set-ctrl">
+              <label class="sw"><input type="checkbox" id="dsAudioIn" /><i></i></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="dlg-sec" data-sec="net">
+          <div class="set-row">
+            <div class="set-ico"><svg viewBox="0 0 24 24"><path d="M3 17h2v-4H3zM8 17h2V9H8zM13 17h2V5h-2zM18 17h2v-7h-2z"/></svg></div>
+            <div class="set-main">
+              <div class="set-label">网络场景</div>
+              <div class="set-desc">模拟不同网络环境下的带宽与延迟</div>
+            </div>
+            <div class="set-ctrl"><select id="dsNet"></select></div>
+          </div>
+          <div class="set-row">
+            <div class="set-ico"><svg viewBox="0 0 24 24"><path d="M12 2.5 4 6v6c0 5 3.4 8.4 8 9.5 4.6-1.1 8-4.5 8-9.5V6z"/></svg></div>
+            <div class="set-main">
+              <div class="set-label">使用系统代理</div>
+              <div class="set-desc">在「代理」页填写代理地址</div>
+            </div>
+            <div class="set-ctrl">
+              <label class="sw"><input type="checkbox" id="dsProxy" /><i></i></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="dlg-sec" data-sec="model">
+          <div class="set-row">
+            <div class="set-ico"><svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><line x1="10" y1="18.5" x2="14" y2="18.5"/></svg></div>
+            <div class="set-main">
+              <div class="set-label">设备型号</div>
+              <div class="set-desc">决定屏幕尺寸、DPI 与硬件参数</div>
+            </div>
+            <div class="set-ctrl"><select id="dsModel"></select></div>
+          </div>
+          <div class="set-row">
+            <div class="set-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-4 3.5-6 7-6s6 2 7 6"/></svg></div>
+            <div class="set-main">
+              <div class="set-label">真机身份</div>
+              <div class="set-desc">写入品牌 / 机型 / 指纹等属性，详见「真机档案」</div>
+            </div>
+            <div class="set-ctrl"><span class="set-val" id="dsIdentity">—</span></div>
+          </div>
+        </div>
+
+        <div class="dlg-sec" data-sec="dev">
+          <div class="set-row">
+            <div class="set-ico"><svg viewBox="0 0 24 24"><path d="M12 2.5 4 6v6c0 5 3.4 8.4 8 9.5 4.6-1.1 8-4.5 8-9.5V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
+            <div class="set-main">
+              <div class="set-label">Root 权限</div>
+              <div class="set-desc">启用 su 与 adbd root（仅 google_apis / atd 镜像支持）</div>
+            </div>
+            <div class="set-ctrl">
+              <label class="sw"><input type="checkbox" id="dsRoot" /><i></i></label>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-ico"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M8 12h8M12 8v8"/></svg></div>
+            <div class="set-main">
+              <div class="set-label">系统分区可写</div>
+              <div class="set-desc">以 -writable-system 启动，可修改 /system</div>
+            </div>
+            <div class="set-ctrl">
+              <label class="sw"><input type="checkbox" id="dsWritable" /><i></i></label>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></div>
+            <div class="set-main">
+              <div class="set-label">后台运行</div>
+              <div class="set-desc">不显示模拟器原生窗口，画面在管理器内显示</div>
+            </div>
+            <div class="set-ctrl">
+              <label class="sw"><input type="checkbox" id="dsHidden" /><i></i></label>
+            </div>
+          </div>
+        </div>
+
+        <div class="dlg-sec" data-sec="other">
+          <div class="set-row">
+            <div class="set-ico"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></div>
+            <div class="set-main">
+              <div class="set-label">数据分区大小</div>
+              <div class="set-desc">修改后需重建数据分区才生效</div>
+            </div>
+            <div class="set-ctrl">
+              <select id="dsDisk">
+                <option value="4">4 GB</option>
+                <option value="6">6 GB</option>
+                <option value="8">8 GB</option>
+                <option value="16">16 GB</option>
+                <option value="32">32 GB</option>
+              </select>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-ico"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></div>
+            <div class="set-main">
+              <div class="set-label">快照快速启动</div>
+              <div class="set-desc">保存运行状态，下次启动更快，但可能残留脏状态</div>
+            </div>
+            <div class="set-ctrl">
+              <label class="sw"><input type="checkbox" id="dsSnapshot" /><i></i></label>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-ico"><svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v10H4z"/></svg></div>
+            <div class="set-main">
+              <div class="set-label">日志目录</div>
+              <div class="set-desc" id="dsLogDir">—</div>
+            </div>
+            <div class="set-ctrl"><button class="btn small" id="dsOpenLog">打开</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <footer class="dlg-foot">
+      <span class="dlg-hint" id="dlgHint">部分设置需重启虚拟机生效</span>
+      <button class="btn" id="btnDevSetCancel">取消</button>
+      <button class="btn primary" id="btnDevSetSave">保存并应用</button>
+    </footer>
   </div>
 </div>
 

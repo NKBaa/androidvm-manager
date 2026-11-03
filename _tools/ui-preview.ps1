@@ -46,4 +46,24 @@ foreach ($t in $tabs) {
     Write-Host "  ui_$t.png  生成失败" -ForegroundColor Red
   }
 }
+
+# 启动器 / 卡片菜单 / 设备设置弹窗 / SDK 提示条
+$extra = @(
+  @{ n = 'ui_launcher';    q = 'view=launcher' },
+  @{ n = 'ui_ctxmenu';     q = 'view=launcher&ctx=1' },
+  @{ n = 'ui_devsettings'; q = 'view=launcher&dlg=perf' },
+  @{ n = 'ui_sdk_banner';  q = 'tab=device&sdkready=0' }
+)
+foreach ($e in $extra) {
+  $out = Join-Path $logs "$($e.n).png"
+  if (Test-Path $out) { Remove-Item $out -Force }
+  & $chrome --headless=new --disable-gpu --hide-scrollbars `
+    --window-size=1440,940 --virtual-time-budget=5000 `
+    --screenshot="$out" "$uri`?$($e.q)" 2>$null | Out-Null
+  if (Test-Path $out) {
+    Write-Host ("  {0,-16} {1,7:N0} B" -f "$($e.n).png", (Get-Item $out).Length)
+  } else {
+    Write-Host "  $($e.n).png  生成失败" -ForegroundColor Red
+  }
+}
 Write-Host "预览截图已保存到 _logs\"
