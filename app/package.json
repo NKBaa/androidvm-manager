@@ -46,6 +46,10 @@
     ],
     "extraResources": [
       {
+        "from": "build/avd-template.ini",
+        "to": "seed/avd/config.ini"
+      },
+      {
         "from": "../_data/supported_devices.csv",
         "to": "seed/_data/supported_devices.csv"
       },

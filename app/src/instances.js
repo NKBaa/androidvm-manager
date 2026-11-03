@@ -8,7 +8,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const net = require('node:net');
-const { conf } = require('./config');
+const { conf, seedAvdConfig } = require('./config');
 
 const DATA_DIR = path.join(conf.vmRoot, '_data');
 const INST_DIR = path.join(DATA_DIR, 'instances');
@@ -155,8 +155,24 @@ async function create({ name, fromId } = {}) {
   const dstCfg = path.join(avdDir, 'config.ini');
   if (fs.existsSync(srcCfg)) {
     fs.copyFileSync(srcCfg, dstCfg);
+    // 克隆过来的配置带着源 AVD 的 avd.id / avd.name，必须改成新实例的，
+    // 否则模拟器可能认错 AVD
+    try {
+      let t = fs.readFileSync(dstCfg, 'utf8');
+      t = t.replace(/^avd\.id=.*$/m, `avd.id=${avdName}`);
+      t = t.replace(/^avd\.name=.*$/m, `avd.name=${avdName}`);
+      fs.writeFileSync(dstCfg, t, 'utf8');
+    } catch {}
   } else {
-    fs.writeFileSync(dstCfg, 'avd.ini.encoding=UTF-8\n', 'utf8');
+    // 全新安装时没有可复制的源配置，用随包模板生成完整 config.ini
+    // （只写一行 encoding 是不够的，模拟器缺 abi.type/image.sysdir.1 会 FATAL 退出）
+    seedAvdConfig(avdDir);
+    try {
+      let t = fs.readFileSync(dstCfg, 'utf8');
+      t = t.replace(/^avd\.id=.*$/m, `avd.id=${avdName}`);
+      t = t.replace(/^avd\.name=.*$/m, `avd.name=${avdName}`);
+      fs.writeFileSync(dstCfg, t, 'utf8');
+    } catch {}
   }
 
   // 2) 写 AVD 定义文件（path 必须正确，否则模拟器会回退到 arm 架构直接退出）

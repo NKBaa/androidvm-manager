@@ -174,11 +174,29 @@ conf.images = {
   },
 };
 
+/**
+ * 挑一个**实际已安装**的镜像作为默认引擎。
+ * 之前硬编码 playstore，但 SDK 下载器装的是 google_apis，
+ * 全新安装后直接启动会因为找不到 playstore 镜像而失败。
+ */
+function pickInstalledEngine() {
+  const order = ['google_apis', 'playstore', 'atd'];
+  for (const k of order) {
+    try {
+      const dir = path.join(conf.sdkRoot, conf.images[k].dir);
+      if (fs.existsSync(path.join(dir, 'system.img'))) return k;
+    } catch {}
+  }
+  return 'google_apis'; // 一个都没装：先给推荐值，启动时会提示去装
+}
+
+const DEFAULT_ENGINE = pickInstalledEngine();
+
 conf.defaultConfig = {
   name: 'Android 14 虚拟机',
   avdName: 'A14_Root',
-  engine: 'playstore',
-  image: conf.images.playstore.id,
+  engine: DEFAULT_ENGINE,
+  image: conf.images[DEFAULT_ENGINE].id,
   deviceKey: 'pixel_7',
   ram: 4096,
   cores: 4,
@@ -236,4 +254,74 @@ function ensureDirs() {
   try { seedData(); } catch {}
 }
 
-module.exports = { conf, ensureDirs, seedData };
+// ---------------------------------------------------------------
+// AVD 模板
+//
+// 全新安装的机器上没有任何 AVD，程序必须能自己建一个。
+// 只写几行 key 是不够的：模拟器需要 abi.type / hw.cpu.arch / image.sysdir.1
+// / tag.id / skin 等一整套配置，缺了会回退到 arm 架构直接 FATAL 退出。
+// 所以随包带一份能正常启动的完整 config.ini 当模板。
+// ---------------------------------------------------------------
+const MINIMAL_AVD_CONFIG = [
+  'avd.ini.encoding=UTF-8',
+  'abi.type=x86_64',
+  'hw.cpu.arch=x86_64',
+  'hw.cpu.ncore=4',
+  'hw.ramSize=4096',
+  'hw.lcd.width=1080',
+  'hw.lcd.height=2400',
+  'hw.lcd.density=420',
+  'hw.keyboard=no',
+  'hw.mainKeys=no',
+  'hw.dPad=no',
+  'hw.gps=yes',
+  'hw.audioInput=yes',
+  'hw.audioOutput=yes',
+  'hw.gpu.enabled=yes',
+  'hw.gpu.mode=host',
+  'hw.sdCard=yes',
+  'disk.dataPartition.size=6G',
+  'image.sysdir.1=system-images/android-34/google_apis/x86_64/',
+  'tag.id=google_apis',
+  'tag.display=Google APIs',
+  'PlayStore.enabled=false',
+  'skin.dynamic=yes',
+  'skin.name=1080x2400',
+  'skin.path=_no_skin',
+  'showDeviceFrame=no',
+  '',
+].join('\n');
+
+/** 找到随包的 AVD 模板 config.ini */
+function avdTemplatePath() {
+  const cands = [];
+  if (conf.packaged && conf.resourcesPath) {
+    cands.push(path.join(conf.resourcesPath, 'seed', 'avd', 'config.ini'));
+  }
+  cands.push(path.join(APP_DIR, 'build', 'avd-template.ini'));
+  for (const p of cands) {
+    try {
+      if (fs.existsSync(p)) return p;
+    } catch {}
+  }
+  return null;
+}
+
+/**
+ * 确保 <avdDir>/config.ini 存在。不存在就从模板复制，模板也找不到就写最小配置。
+ * 返回 { created, from }。
+ */
+function seedAvdConfig(avdDir) {
+  fs.mkdirSync(avdDir, { recursive: true });
+  const dst = path.join(avdDir, 'config.ini');
+  if (fs.existsSync(dst)) return { created: false };
+  const tpl = avdTemplatePath();
+  if (tpl) {
+    fs.copyFileSync(tpl, dst);
+    return { created: true, from: tpl };
+  }
+  fs.writeFileSync(dst, MINIMAL_AVD_CONFIG, 'utf8');
+  return { created: true, fallback: true };
+}
+
+module.exports = { conf, ensureDirs, seedData, seedAvdConfig, avdTemplatePath, MINIMAL_AVD_CONFIG };

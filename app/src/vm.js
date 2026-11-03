@@ -2,7 +2,7 @@
 const { spawn, execFile } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
-const { conf, ensureDirs } = require('./config');
+const { conf, ensureDirs, seedAvdConfig } = require('./config');
 const adbmod = require('./adb');
 
 const STATE_FILE = path.join(conf.vmRoot, 'app', 'state.json');
@@ -19,6 +19,8 @@ function readIni(file) {
 }
 
 function writeIni(file, obj) {
+  // 目录可能还不存在（全新安装时 avd/<name>.avd 还没建），必须先建
+  fs.mkdirSync(path.dirname(file), { recursive: true });
   const text = Object.entries(obj)
     .map(([k, v]) => `${k}=${v === undefined || v === null ? '' : v}`)
     .join('\n');
@@ -160,6 +162,14 @@ class VmManager {
   }
 
   applyConfigToAvd(cfg) {
+    // 全新安装的机器上没有 AVD 目录，先从随包模板生成一份完整配置，
+    // 否则模拟器缺 abi.type / hw.cpu.arch / image.sysdir.1 会回退到 arm 直接 FATAL
+    fs.mkdirSync(this.avdDir, { recursive: true });
+    const seeded = seedAvdConfig(this.avdDir);
+    if (seeded.created) {
+      console.log(`[vm] 已从模板生成 AVD 配置: ${this.avdDir}${seeded.fallback ? '（内置最小配置）' : ''}`);
+    }
+
     const ini = readIni(this.configPath);
     const dev = conf.devices[cfg.deviceKey] || conf.devices.pixel_7;
     const img = conf.images[cfg.engine] || conf.images.playstore;
@@ -178,15 +188,17 @@ class VmManager {
     ini['hw.camera.back'] = cfg.camera.back || 'virtualscene';
     ini['hw.camera.front'] = cfg.camera.front || 'emulated';
 
+    // AVD 身份：克隆出来的 config.ini 会带着源 AVD 的 id/name，必须覆盖成本实例的，
+    // 否则模拟器可能认错 AVD
+    ini['avd.id'] = this.avdName;
+    ini['avd.name'] = this.avdName;
+    ini['avd.ini.encoding'] = 'UTF-8';
+
     // 系统镜像：必须与 engine 一致，否则模拟器按旧镜像启动（表现为黑屏 / 无 UI）
     ini['image.sysdir.1'] = img.dir;
     ini['tag.id'] = img.tag;
     ini['tag.display'] = img.tagDisplay;
     ini['PlayStore.enabled'] = img.playStore;
-    if (img.engine === 'playstore') {
-      ini['avd.id'] = this.avdName;
-      ini['avd.name'] = this.avdName;
-    }
     writeIni(this.configPath, ini);
   }
 
@@ -281,6 +293,18 @@ class VmManager {
     if (this.state.running) return { ok: true, already: true, state: this.state };
     const cfg = { ...this.getConfig(), ...opts };
     if (opts.network) cfg.network = { ...this.getConfig().network, ...opts.network };
+
+    // 镜像没装就别往下走：否则模拟器只会黑屏或 FATAL，用户看不出真正原因
+    const img = conf.images[cfg.engine];
+    if (!img) throw new Error(`未知系统镜像: ${cfg.engine}`);
+    const imgDir = path.join(conf.sdkRoot, img.dir);
+    if (!fs.existsSync(path.join(imgDir, 'system.img'))) {
+      throw new Error(
+        `系统镜像未安装：${img.id}\n\n` +
+          `请用界面上的「在线下载 SDK」安装，或在「设备设置 → 机型」里切换到已安装的镜像。`
+      );
+    }
+
     this.saveState(cfg);
     // 先修好 AVD 定义文件，再写 config.ini：顺序反了会导致模拟器按错误的 AVD 目录启动
     const iniFix = this.ensureAvdIni();
