@@ -159,12 +159,25 @@ async function connectionState(serial) {
  * 只靠"输出里有没有 Permission denied"来判断会漏掉，所以这里显式升权。
  */
 async function ensureRoot() {
-  const uid = (await shell('id -u').catch(() => '')).trim();
-  if (uid === '0') return true;
+  // 先多试几次：adb 偶尔会瞬时返回空串，若直接据此判定「没 root」，
+  // 就会多余地执行 adb root（重启 adbd），把后续命令全部打断。
+  for (let i = 0; i < 3; i++) {
+    const uid = (await shell('id -u').catch(() => '')).trim();
+    if (uid === '0') return true;
+    if (uid !== '') break; // 拿到了明确的非 0 结果，确实不是 root
+    await new Promise((r) => setTimeout(r, 400));
+  }
+
+  // adb root 会重启 adbd，连接会短暂断开；必须等设备回来再判断。
   await adb(['root'], { allowFail: true, timeout: 15000 }).catch(() => {});
-  await new Promise((r) => setTimeout(r, 2500));
-  const uid2 = (await shell('id -u').catch(() => '')).trim();
-  return uid2 === '0';
+  await adb(['wait-for-device'], { allowFail: true, timeout: 30000 }).catch(() => {});
+
+  for (let i = 0; i < 15; i++) {
+    await new Promise((r) => setTimeout(r, 800));
+    const u = (await shell('id -u').catch(() => '')).trim();
+    if (u === '0') return true;
+  }
+  return false;
 }
 
 async function rootShell(cmd) {

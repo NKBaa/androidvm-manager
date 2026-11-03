@@ -443,6 +443,19 @@ class VmManager {
       // 应用号码
       const { setPhoneNumber } = require('./phone');
       await setPhoneNumber(cfg.phone);
+
+      // netsimd 起不来时蓝牙栈会反复崩溃，系统不停弹「Bluetooth keeps stopping」。
+      // 检测到这种情况就把蓝牙应用禁掉，止住弹窗（本来也用不了）。
+      try {
+        const log = String(this.readLog(4000) || '');
+        if (/Netsim daemon failed to start/i.test(log)) {
+          const bt = require('./bluetooth');
+          const r = await bt.suppressCrash();
+          if (r && r.ok) console.log('[vm] netsimd 不可用，已禁用蓝牙应用以止住崩溃弹窗');
+        }
+      } catch (e) {
+        console.warn('[vm] 抑制蓝牙崩溃弹窗失败:', e.message);
+      }
     } catch (e) {
       this.state.error = 'postBoot: ' + e.message;
     }

@@ -252,6 +252,16 @@ body {
   object-fit: contain;
   display: block;
 }
+/* 真实截屏缩略图：按手机比例居中显示 */
+.dev-shot {
+  height: 148px !important;
+  width: auto !important;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, .10);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .5);
+  object-fit: contain;
+  background: #000;
+}
 .dev-thumb-ph {
   display: flex;
   flex-direction: column;

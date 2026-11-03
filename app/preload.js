@@ -19,6 +19,12 @@ contextBridge.exposeInMainWorld('api', {
       return () => ipcRenderer.removeListener('sdk:progress', h);
     },
   },
+  // 通用任务进度（备份 / 还原）
+  onTaskProgress: (cb) => {
+    const h = (_e, data) => cb(data);
+    ipcRenderer.on('task:progress', h);
+    return () => ipcRenderer.removeListener('task:progress', h);
+  },
   camera: {
     hosts: () => invoke('camera:hosts'),
     status: () => invoke('camera:status'),
@@ -54,6 +60,7 @@ contextBridge.exposeInMainWorld('api', {
     backups: (id) => invoke('instances:backups', id),
     restore: (id, file) => invoke('instances:restore', id, file),
     shortcut: (id) => invoke('instances:shortcut', id),
+    thumb: (id) => invoke('instances:thumb', id),
   },
   net: {
     apply: (n) => invoke('net:apply', n),
@@ -128,6 +135,8 @@ contextBridge.exposeInMainWorld('api', {
     name: (n) => invoke('bt:name', n),
     paired: () => invoke('bt:paired'),
     status: () => invoke('bt:status'),
+    suppressCrash: () => invoke('bt:suppressCrash'),
+    restore: () => invoke('bt:restore'),
   },
   cell: {
     signal: (lv) => invoke('cell:signal', lv),

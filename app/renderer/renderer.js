@@ -868,6 +868,23 @@ $('btnBtPaired').addEventListener('click', async () => {
   const r = await call(bridge.bt.paired(), '配对设备');
   showBt(r && r.length ? r : '没有配对设备');
 });
+$('btnBtSuppress').addEventListener('click', async () => {
+  const ok = window.confirm(
+    '禁用蓝牙应用可以止住「Bluetooth keeps stopping」弹窗。\n\n' +
+      'netsimd 不可用时蓝牙本来就无法使用，禁用后不会影响其他功能。\n继续？'
+  );
+  if (!ok) return;
+  const r = await call(bridge.bt.suppressCrash(), '禁用蓝牙应用');
+  showBt(r);
+  if (r && r.ok) toast('已禁用蓝牙应用，弹窗会消失', 'ok');
+});
+
+$('btnBtRestore').addEventListener('click', async () => {
+  const r = await call(bridge.bt.restore(), '恢复蓝牙应用');
+  showBt(r);
+  if (r && r.ok) toast('已恢复蓝牙应用', 'ok');
+});
+
 $('btnBtName').addEventListener('click', async () => {
   const n = $('btName').value.trim();
   if (!n) return toast('请填写蓝牙名称', 'err');
@@ -1081,6 +1098,41 @@ let devViewMode = 'grid';
 let devSortMode = 'default';
 let devQuery = '';
 let ctxTarget = null;
+const thumbCache = new Map(); // id -> dataURL
+let thumbBusy = false;
+let thumbTimer = null;
+
+/** 给运行中的设备抓缩略图（较慢，单独 10 秒一轮） */
+async function refreshThumbs() {
+  if (thumbBusy) return;
+  const running = devCache.filter((d) => d.online);
+  if (!running.length) return;
+  thumbBusy = true;
+  try {
+    for (const it of running) {
+      const r = await call(bridge.instances.thumb(it.id), '抓缩略图', true);
+      if (r && r.dataUrl) {
+        thumbCache.set(it.id, r.dataUrl);
+        // 只改图片节点，不重绘整个网格，避免闪烁
+        const card = document.querySelector(`.dev-card[data-id="${it.id}"]`);
+        if (!card) continue;
+        let img = card.querySelector('.dev-shot');
+        if (!img) {
+          img = document.createElement('img');
+          img.className = 'dev-shot';
+          img.dataset.id = it.id;
+          img.alt = '';
+          card.querySelector('.dev-thumb').prepend(img);
+        }
+        img.src = r.dataUrl;
+        const ph = card.querySelector('.dev-thumb-ph');
+        if (ph) ph.style.display = 'none';
+      }
+    }
+  } finally {
+    thumbBusy = false;
+  }
+}
 
 function devStatusOf(it) {
   if (it.online) return { text: '运行中', running: true };
@@ -1112,13 +1164,15 @@ function renderDeviceGrid() {
   list.forEach((it, i) => {
     const st = devStatusOf(it);
     const s = it.summary || {};
+    const shot = thumbCache.get(it.id);
     const el = document.createElement('div');
     el.className = 'dev-card' + (st.running ? ' running' : '');
     el.dataset.id = it.id;
     el.innerHTML =
       `<div class="dev-thumb">
          <span class="dev-index">#${i}</span>
-         <div class="dev-thumb-ph">
+         ${shot ? `<img class="dev-shot" data-id="${it.id}" src="${shot}" alt="">` : ''}
+         <div class="dev-thumb-ph" data-id="${it.id}"${shot ? ' style="display:none"' : ''}>
            <svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><line x1="10" y1="18.5" x2="14" y2="18.5"/></svg>
            <span>${st.text}</span>
          </div>
@@ -1298,6 +1352,41 @@ async function handleCtxAction(act, it) {
   }
 }
 
+// ---------- 通用任务进度（备份 / 还原） ----------
+let taskUnsub = null;
+
+function showTaskProgress(on) {
+  const el = $('taskProgress');
+  if (!el) return;
+  el.style.display = on ? 'flex' : 'none';
+  if (!on) {
+    $('taskBar').style.width = '0%';
+    $('taskPct').textContent = '0%';
+  }
+}
+
+function onTaskProgress(d) {
+  if (!d) return;
+  if (d.phase === 'start') {
+    showTaskProgress(true);
+    $('taskPhase').textContent = d.label + '…';
+    $('taskBar').style.width = '0%';
+    $('taskPct').textContent = '0%';
+    return;
+  }
+  if (d.phase === 'copy') {
+    $('taskPhase').textContent = `${d.label}  ${fmtMB(d.received)} / ${fmtMB(d.total)}`;
+    $('taskBar').style.width = (d.percent || 0).toFixed(1) + '%';
+    $('taskPct').textContent = (d.percent || 0).toFixed(0) + '%';
+    return;
+  }
+  if (d.phase === 'done') {
+    $('taskBar').style.width = '100%';
+    $('taskPct').textContent = '100%';
+    setTimeout(() => showTaskProgress(false), 900);
+  }
+}
+
 // ---------- 备份与还原 ----------
 async function openBackupDialog(it) {
   const list = await call(bridge.instances.backups(it.id), '读取备份', true);
@@ -1315,14 +1404,17 @@ async function openBackupDialog(it) {
 
   const n = parseInt(ans, 10);
   if (Number.isFinite(n) && n >= 1 && list && list[n - 1]) {
-    const ok = window.confirm('还原会覆盖当前数据分区，且需要先关闭虚拟机。继续？');
+    if (devStatusOf(it).running) {
+      toast('虚拟机正在运行，请先关闭再还原', 'err');
+      return;
+    }
+    const ok = window.confirm('还原会覆盖当前数据分区，不可撤销。继续？');
     if (!ok) return;
     const r = await call(bridge.instances.restore(it.id, list[n - 1].file), '还原备份');
     if (r) toast('已还原，重新启动虚拟机生效', 'ok');
     return;
   }
 
-  toast('正在备份数据分区，请稍候…');
   const r = await call(bridge.instances.backup(it.id), '备份');
   if (r) toast(`备份完成（${(r.bytes / 1024 / 1024 / 1024).toFixed(2)} GB）`, 'ok');
 }
@@ -1519,12 +1611,33 @@ $('devSearch').addEventListener('input', (e) => {
   await loadConfig();
   await refreshCamData();
   await refreshStatus();
-  switchView('launcher');
+
+  // 备份 / 还原进度条
+  if (!taskUnsub && typeof bridge.onTaskProgress === 'function') {
+    taskUnsub = bridge.onTaskProgress(onTaskProgress);
+  }
+
+  // 从桌面快捷方式启动：直接进运行窗口
+  const startup = appInfo && appInfo.startupInstance;
+  if (startup && devCache.some((d) => d.id === startup)) {
+    switchView('workspace');
+  } else {
+    switchView('launcher');
+  }
+
   statusTimer = setInterval(async () => {
     await refreshStatus();
     await refreshInstances();
     await refreshDevices();
   }, 4000);
-})();
+
+  // 缩略图单独慢速刷新（抓图比查状态贵得多）
+  setTimeout(refreshThumbs, 1200);
+  thumbTimer = setInterval(refreshThumbs, 10000);
+})().catch((e) => {
+  // 初始化失败时别静默 —— 否则界面看着正常但功能全哑
+  console.error('初始化失败:', e);
+  toast('界面初始化失败：' + (e && e.message ? e.message : e), 'err');
+});
 })();
 

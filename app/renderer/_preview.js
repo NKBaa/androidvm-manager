@@ -59,6 +59,31 @@
           if (nav) nav.click();
         }, 120);
       }
+      if (q.get('task')) {
+        const el = document.getElementById('taskProgress');
+        if (el) {
+          el.style.display = 'flex';
+          document.getElementById('taskPhase').textContent = '备份 主实例  1.8 GB / 4.2 GB';
+          document.getElementById('taskBar').style.width = '43%';
+          document.getElementById('taskPct').textContent = '43%';
+        }
+      }
+      if (q.get('diag')) {
+        const box = document.createElement('div');
+        box.style.cssText =
+          'position:fixed;right:8px;bottom:40px;z-index:99999;background:#000;color:#0f0;' +
+          'font:12px monospace;padding:8px;white-space:pre';
+        document.body.appendChild(box);
+        setInterval(() => {
+          const shots = document.querySelectorAll('.dev-shot');
+          box.textContent =
+            `dev-shot 数量=${shots.length}\n` +
+            `卡片数=${document.querySelectorAll('.dev-card').length}\n` +
+            `initStep=${window.__initStep}\n` +
+            `err=${window.__initErr || '无'}\n` +
+            `--- thumbLog ---\n${window.__thumbLog || '(未执行)'}`;
+        }, 300);
+      }
       document.title = 'ready';
     }, scrollTo ? 700 : 250);
 

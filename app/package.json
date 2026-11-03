@@ -27,7 +27,8 @@
     },
     "asar": true,
     "asarUnpack": [
-      "src/**"
+      "src/**",
+      "build/icon.png"
     ],
     "electronDist": "node_modules/electron/dist",
     "electronVersion": "31.7.7",
@@ -36,6 +37,7 @@
       "preload.js",
       "renderer/**/*",
       "src/**/*",
+      "build/icon.png",
       "!renderer/_preview.html",
       "!renderer/_mock.js",
       "!renderer/_preview.js",

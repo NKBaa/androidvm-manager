@@ -115,4 +115,30 @@ async function getStatus() {
   };
 }
 
-module.exports = { setEnabled, setName, listPaired, getStatus, getBackend };
+/**
+ * netsimd 不可用时，蓝牙栈会反复崩溃，系统不断弹「Bluetooth keeps stopping」。
+ * 禁用蓝牙应用可以止住弹窗（本来也用不了）。
+ * 只有确认 netsimd 起不来时才应该调用它。
+ */
+async function suppressCrash() {
+  await adbmod.rootShell('pm disable-user --user 0 com.android.bluetooth 2>&1').catch(() => '');
+  const disabled = await shell('pm list packages -d 2>&1');
+  return { ok: String(disabled).includes('com.android.bluetooth') };
+}
+
+/** 恢复蓝牙应用（netsimd 修好后可用） */
+async function restoreCrash() {
+  await adbmod.rootShell('pm enable com.android.bluetooth 2>&1').catch(() => '');
+  const disabled = await shell('pm list packages -d 2>&1');
+  return { ok: !String(disabled).includes('com.android.bluetooth') };
+}
+
+module.exports = {
+  setEnabled,
+  setName,
+  listPaired,
+  getStatus,
+  getBackend,
+  suppressCrash,
+  restoreCrash,
+};

@@ -25,6 +25,13 @@
     <button class="btn small" id="btnSdkCancel">取消</button>
   </div>
 
+  <!-- 通用任务进度（备份 / 还原） -->
+  <div class="sdk-progress" id="taskProgress" style="display:none">
+    <span class="sdk-phase" id="taskPhase">准备中…</span>
+    <div class="sdk-bar"><i id="taskBar"></i></div>
+    <span class="sdk-pct" id="taskPct">0%</span>
+  </div>
+
   <div class="shell">
     <!-- ================= 左侧图标栏 ================= -->
     <nav class="rail">
@@ -301,6 +308,11 @@
           <label>适配器名称 <input type="text" id="btName" placeholder="例如 Galaxy S23 Ultra" /></label>
           <button class="btn small" id="btnBtName">设置名称</button>
           <p class="hint">⚠️ 本机 netsimd 无法启动，蓝牙底层不可用，开启会被拦截。</p>
+          <div class="row wrap">
+            <button class="btn small" id="btnBtSuppress">停止崩溃弹窗</button>
+            <button class="btn small" id="btnBtRestore">恢复蓝牙应用</button>
+          </div>
+          <p class="hint">netsimd 不可用时蓝牙会反复崩溃弹「Bluetooth keeps stopping」。点「停止崩溃弹窗」会禁用蓝牙应用止住弹窗（开机会自动处理）。</p>
           <pre class="mono small" id="btOut">—</pre>
         </div>
 

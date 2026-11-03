@@ -90,9 +90,17 @@ async function setVolume({ music, ring, alarm, call }) {
 }
 
 async function getAudio() {
-  const vol = await adbmod.shell('dumpsys audio | grep -m6 -E "STREAM_|streamVolume" ').catch(() => '');
-  const devices = await adbmod.shell('dumpsys audio | grep -m5 "Devices:"').catch(() => '');
-  return { volume: vol.trim(), devices: devices.trim() };
+  // 注意：不要用 grep -E "a|b" 这种带引号的正则 —— 经 Windows 的 adb 传参后
+  // 引号会被吃掉，里面的 | 变成管道符，命令直接失效且返回空串。
+  let vol = await adbmod.shell('dumpsys audio | grep -m6 streamVolume').catch(() => '');
+  if (!String(vol).trim()) {
+    // 兜底：Android 14 的 settings 键是 volume_music / volume_ring / volume_voice
+    vol = await adbmod
+      .shell('settings get system volume_music; settings get system volume_ring; settings get system volume_voice')
+      .catch(() => '');
+  }
+  const devices = await adbmod.shell('dumpsys audio | grep -m5 -i device').catch(() => '');
+  return { volume: String(vol).trim(), devices: String(devices).trim() };
 }
 
 async function setMute(mute) {

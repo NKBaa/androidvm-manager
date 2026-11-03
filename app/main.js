@@ -1,5 +1,5 @@
 // Electron 主进程
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, Tray, Menu } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -18,6 +18,12 @@ const cell = require('./src/cellular');
 const instances = require('./src/instances');
 const sdkdownloader = require('./src/sdkdownloader');
 const cameramod = require('./src/camera');
+
+/** 桌面快捷方式传进来的 --instance=<id>，启动后自动选中并拉起该设备 */
+const startupInstanceId = (() => {
+  const arg = process.argv.find((a) => a.startsWith('--instance='));
+  return arg ? arg.slice('--instance='.length).trim() : null;
+})();
 
 // ---------------------------------------------------------------
 // 多开：每个实例一个 VmManager，按需创建并缓存。
@@ -58,7 +64,7 @@ function createWindow() {
     height: 940,
     minWidth: 1180,
     minHeight: 760,
-    backgroundColor: '#080b11',
+    backgroundColor: '#121212',
     title: 'Android 14 虚拟机管理器',
     autoHideMenuBar: true,
     webPreferences: {
@@ -69,6 +75,115 @@ function createWindow() {
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   if (process.argv.includes('--dev')) win.webContents.openDevTools({ mode: 'detach' });
+
+  // 关闭窗口时收进托盘（托盘创建失败则保持原来的「关闭即退出」）
+  win.on('close', (e) => {
+    if (!quitting && tray) {
+      e.preventDefault();
+      win.hide();
+    }
+  });
+}
+
+// ---------------------------------------------------------------
+// 系统托盘
+// ---------------------------------------------------------------
+let tray = null;
+let quitting = false;
+
+function showWindow() {
+  if (!win || win.isDestroyed()) {
+    createWindow();
+    return;
+  }
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
+function trayImage() {
+  const p = path.join(__dirname, 'build', 'icon.png');
+  const img = nativeImage.createFromPath(p);
+  if (img.isEmpty()) return null;
+  return img.resize({ width: 16, height: 16 });
+}
+
+/** 托盘菜单每次弹出前重建，保证设备列表与运行状态是最新的 */
+async function buildTrayMenu() {
+  const reg = instances.load();
+  const list = reg.list || [];
+  const items = [];
+  for (const it of list) {
+    let running = false;
+    try {
+      const st = await managerFor(it).status();
+      running = !!(st && st.running);
+    } catch {}
+    items.push({
+      label: `${it.name}${running ? ' · 运行中' : ''}`,
+      submenu: [
+        {
+          label: '启动',
+          enabled: !running,
+          click: () => {
+            managerFor(it).start({}).catch((e) => console.error('托盘启动失败:', e.message));
+          },
+        },
+        {
+          label: '停止',
+          enabled: running,
+          click: () => {
+            managerFor(it).stop().catch((e) => console.error('托盘停止失败:', e.message));
+          },
+        },
+      ],
+    });
+  }
+  if (!items.length) items.push({ label: '还没有设备', enabled: false });
+
+  return Menu.buildFromTemplate([
+    { label: '显示主窗口', click: showWindow },
+    { type: 'separator' },
+    { label: `设备（${list.length}）`, submenu: items },
+    { type: 'separator' },
+    { label: '打开数据目录', click: () => shell.openPath(conf.vmRoot) },
+    { label: '打开日志目录', click: () => shell.openPath(conf.logDir) },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => {
+        quitting = true;
+        app.quit();
+      },
+    },
+  ]);
+}
+
+function createTray() {
+  // 图标读不到就不要建托盘 —— 否则关窗会「藏进一个看不见的托盘」，用户找不回窗口
+  const img = trayImage();
+  if (!img) {
+    console.error('托盘图标加载失败，跳过托盘（关闭窗口将直接退出）');
+    tray = null;
+    return;
+  }
+  try {
+    tray = new Tray(img);
+  } catch (e) {
+    console.error('托盘创建失败（关闭窗口仍会退出）:', e.message);
+    tray = null;
+    return;
+  }
+  tray.setToolTip('Android 14 虚拟机管理器');
+  tray.on('click', showWindow);
+  tray.on('double-click', showWindow);
+  tray.on('right-click', async () => {
+    try {
+      tray.popUpContextMenu(await buildTrayMenu());
+    } catch (e) {
+      console.error('托盘菜单构建失败:', e.message);
+    }
+  });
 }
 
 app.whenReady().then(async () => {
@@ -80,13 +195,37 @@ app.whenReady().then(async () => {
     console.error('初始化数据目录失败:', e.message);
   }
   createWindow();
+  createTray();
   await adbmod.startAdbServer().catch(() => {});
+
+  // 从桌面快捷方式启动：选中目标实例并自动开机
+  if (startupInstanceId) {
+    try {
+      const inst = instances.get(startupInstanceId);
+      if (inst) {
+        instances.setActive(inst.id);
+        adbmod.setTarget(instances.serialOf(inst.port), inst.port);
+        managerFor(inst).start({}).catch((e) => console.error('自动启动失败:', e.message));
+      } else {
+        console.warn('快捷方式指向的实例不存在:', startupInstanceId);
+      }
+    } catch (e) {
+      console.error('处理快捷方式参数失败:', e.message);
+    }
+  }
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
 
+app.on('before-quit', () => {
+  quitting = true;
+});
+
 app.on('window-all-closed', () => {
+  // 有托盘时关闭窗口只是收进托盘，不退出
+  if (tray) return;
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -114,6 +253,7 @@ ipcMain.handle('app:info', wrap(async () => {
     vmRoot: conf.vmRoot,
     packaged: conf.packaged,
     sdkReady: sdkdownloader.checkSdk(conf.sdkRoot).ready,
+    startupInstance: startupInstanceId,
     emulatorPath: conf.emulator,
     adbPath: conf.adb,
     avdName: inst.avdName,
@@ -240,6 +380,66 @@ ipcMain.handle('instances:clean', wrap(async (id) => {
   return { ok: true, output: String(out || '') };
 }));
 
+/** 推任务进度给界面（备份/还原等长耗时操作） */
+function sendTask(o) {
+  try {
+    if (win && !win.isDestroyed()) win.webContents.send('task:progress', o);
+  } catch {}
+}
+
+/** 流式复制文件并上报进度（几 GB 的 userdata 用 copyFileSync 会卡死界面） */
+function copyWithProgress(src, dst, onProgress) {
+  return new Promise((resolve, reject) => {
+    const total = fs.statSync(src).size;
+    let received = 0;
+    let last = 0;
+    const rs = fs.createReadStream(src, { highWaterMark: 4 * 1024 * 1024 });
+    const ws = fs.createWriteStream(dst);
+    rs.on('data', (chunk) => {
+      received += chunk.length;
+      const now = Date.now();
+      if (now - last > 150) {
+        last = now;
+        onProgress(received, total);
+      }
+    });
+    rs.on('error', reject);
+    ws.on('error', reject);
+    ws.on('finish', () => {
+      onProgress(total, total);
+      resolve(received);
+    });
+    rs.pipe(ws);
+  });
+}
+
+// 设备卡片缩略图：按实例自己的 adb 目标抓一张，缩到 260px 宽再回传
+ipcMain.handle('instances:thumb', wrap(async (id) => {
+  const inst = instances.get(id);
+  if (!inst) return null;
+  const serial = instances.serialOf(inst.port);
+  const online = await adbmod.isOnline(serial).catch(() => false);
+  if (!online) return null;
+
+  const buf = await adbmod.withTarget(serial, inst.port, () =>
+    new Promise((resolve, reject) => {
+      execFile(
+        conf.adb,
+        ['-s', serial, 'exec-out', 'screencap', '-p'],
+        { env: adbmod.adbEnv(), encoding: 'buffer', maxBuffer: 64 * 1024 * 1024, windowsHide: true, timeout: 20000 },
+        (err, stdout) => (err ? reject(err) : resolve(stdout))
+      );
+    })
+  ).catch(() => null);
+
+  if (!buf || buf.length < 200) return null;
+  const img = nativeImage.createFromBuffer(buf);
+  if (img.isEmpty()) return null;
+  const size = img.getSize();
+  const thumb = img.resize({ width: 260, quality: 'good' });
+  return { dataUrl: thumb.toDataURL(), width: size.width, height: size.height };
+}));
+
 // 备份：把该实例的 userdata 镜像复制一份
 ipcMain.handle('instances:backup', wrap(async (id) => {
   const inst = instances.get(id);
@@ -251,7 +451,19 @@ ipcMain.handle('instances:backup', wrap(async (id) => {
   fs.mkdirSync(dstDir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
   const dst = path.join(dstDir, `${inst.id}-${stamp}.img`);
-  fs.copyFileSync(src, dst);
+
+  sendTask({ kind: 'backup', phase: 'start', label: `备份 ${inst.name}`, percent: 0 });
+  await copyWithProgress(src, dst, (received, total) => {
+    sendTask({
+      kind: 'backup',
+      phase: 'copy',
+      label: `备份 ${inst.name}`,
+      received,
+      total,
+      percent: total ? (received / total) * 100 : 0,
+    });
+  });
+  sendTask({ kind: 'backup', phase: 'done', percent: 100 });
   return { ok: true, file: dst, bytes: fs.statSync(dst).size };
 }));
 
@@ -271,14 +483,33 @@ ipcMain.handle('instances:backups', wrap(async (id) => {
 ipcMain.handle('instances:restore', wrap(async (id, file) => {
   const inst = instances.get(id);
   if (!inst) throw new Error('实例不存在');
+
+  // 运行中直接覆盖 userdata 会把数据分区写坏，必须先停
+  const st = await managerFor(inst).status().catch(() => null);
+  if (st && st.running) {
+    throw new Error('虚拟机正在运行，请先关闭再还原');
+  }
+
   const src = path.join(conf.vmRoot, '_data', 'backups', path.basename(file));
   if (!fs.existsSync(src)) throw new Error('备份文件不存在');
   const dst = path.join(conf.avdHome, inst.avdName + '.avd', 'userdata-qemu.img');
-  fs.copyFileSync(src, dst);
+
+  sendTask({ kind: 'restore', phase: 'start', label: `还原 ${inst.name}`, percent: 0 });
+  await copyWithProgress(src, dst, (received, total) => {
+    sendTask({
+      kind: 'restore',
+      phase: 'copy',
+      label: `还原 ${inst.name}`,
+      received,
+      total,
+      percent: total ? (received / total) * 100 : 0,
+    });
+  });
+  sendTask({ kind: 'restore', phase: 'done', percent: 100 });
   return { ok: true, file: dst };
 }));
 
-// 创建桌面快捷方式
+// 创建桌面快捷方式（带 --instance=<id>，双击直接启动该设备）
 ipcMain.handle('instances:shortcut', wrap(async (id) => {
   const inst = instances.get(id);
   if (!inst) throw new Error('实例不存在');
@@ -290,6 +521,8 @@ ipcMain.handle('instances:shortcut', wrap(async (id) => {
   const ps = [
     '$s=(New-Object -ComObject WScript.Shell).CreateShortcut(' + JSON.stringify(lnk) + ');',
     '$s.TargetPath=' + JSON.stringify(target) + ';',
+    // 打包版 exe 直接接参数；开发版需要把 app 目录也带上
+    '$s.Arguments=' + JSON.stringify(packagedArgsFor(inst.id)) + ';',
     '$s.WorkingDirectory=' + JSON.stringify(workDir) + ';',
     '$s.IconLocation=' + JSON.stringify(target + ',0') + ';',
     '$s.Description=' + JSON.stringify('Android 14 虚拟机 · ' + inst.name) + ';',
@@ -300,8 +533,14 @@ ipcMain.handle('instances:shortcut', wrap(async (id) => {
       err ? reject(new Error(se || err.message)) : resolve(true)
     );
   });
-  return { ok: true, file: lnk };
+  return { ok: true, file: lnk, args: packagedArgsFor(inst.id) };
 }));
+
+/** 快捷方式要传的参数（打包版直接传，开发版要带 app 目录） */
+function packagedArgsFor(id) {
+  const flag = `--instance=${id}`;
+  return conf.packaged ? flag : `. ${flag}`;
+}
 ipcMain.handle('instances:create', wrap(async (opts) => {
   const inst = await instances.create(opts || {});
   return inst;
@@ -408,6 +647,8 @@ ipcMain.handle('bt:enable', wrap(async (on, force) => bt.setEnabled(on, { force:
 ipcMain.handle('bt:name', wrap(async (n) => bt.setName(n)));
 ipcMain.handle('bt:paired', wrap(async () => bt.listPaired()));
 ipcMain.handle('bt:status', wrap(async () => bt.getStatus()));
+ipcMain.handle('bt:suppressCrash', wrap(async () => bt.suppressCrash()));
+ipcMain.handle('bt:restore', wrap(async () => bt.restoreCrash()));
 
 ipcMain.handle('cell:signal', wrap(async (lv) => cell.setSignal(lv)));
 ipcMain.handle('cell:rssi', wrap(async (r, b) => cell.setRssi(r, b)));
