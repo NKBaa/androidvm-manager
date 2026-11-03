@@ -126,18 +126,6 @@ async function removeInstance(it) {
   }
 }
 
-$('btnInstNew').addEventListener('click', async () => {
-  const n = document.querySelectorAll('.inst-item').length + 1;
-  const name = window.prompt('新实例名称（会克隆当前实例的机型/镜像设置，数据为全新）', `实例 ${n}`);
-  if (name === null) return;
-  toast('正在创建实例…');
-  const r = await call(bridge.instances.create({ name: name || undefined }), '新建实例');
-  if (r) {
-    toast(`已创建「${r.name}」（${r.avdName} / 端口 ${r.port}）`, 'ok');
-    await refreshInstances();
-  }
-});
-
 // ---------- 状态轮询 ----------
 function setSb(kind, text) {
   const d = $('sbDot');
