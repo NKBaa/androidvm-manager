@@ -269,7 +269,7 @@ function liveFilePath() {
  * 开始实时跟随。
  * @param {{rect:{x,y,w,h}, intervalMs:number, onFrame:function}} opts
  */
-async function startLive({ rect, intervalMs = 2000, onFrame } = {}) {
+async function startLive({ rect, intervalMs = 2000, onFrame, onBgr } = {}) {
   stopLive();
   const file = liveFilePath();
   const interval = Math.max(500, Math.min(10000, Number(intervalMs) || 2000));
@@ -292,6 +292,21 @@ async function startLive({ rect, intervalMs = 2000, onFrame } = {}) {
       const cropped = img.crop({ x, y, width: w, height: h });
       const png = cropped.toPNG();
       fs.writeFileSync(file, png);
+
+      // 虚拟摄像头模式：额外输出 BGR24 原始帧（Softcam 要的格式）
+      if (liveState.on && typeof onBgr === 'function') {
+        try {
+          const bgra = cropped.toBitmap(); // Windows 下是 BGRA
+          const need = w * h * 3;
+          const bgr = Buffer.allocUnsafe(need);
+          for (let i = 0, j = 0; j < need; i += 4, j += 3) {
+            bgr[j] = bgra[i];
+            bgr[j + 1] = bgra[i + 1];
+            bgr[j + 2] = bgra[i + 2];
+          }
+          onBgr(bgr);
+        } catch {}
+      }
 
       if (liveState.on && typeof onFrame === 'function') {
         onFrame({ dataUrl: cropped.toDataURL(), bytes: png.length, at: Date.now(), file });

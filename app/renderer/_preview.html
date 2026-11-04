@@ -542,6 +542,17 @@
             <button class="btn small" id="btnCamLive">实时跟随屏幕区域</button>
             <button class="btn small danger" id="btnCamLiveStop" style="display:none">停止跟随</button>
           </div>
+
+          <div class="vcam-box">
+            <div class="vcam-row">
+              <span class="vcam-dot" id="vcamDot"></span>
+              <span id="vcamText">虚拟摄像头：检测中…</span>
+              <div class="mini-spacer"></div>
+              <button class="btn small primary" id="btnVcamInstall" style="display:none">安装虚拟摄像头</button>
+              <button class="btn small danger" id="btnVcamUninstall" style="display:none">卸载</button>
+            </div>
+            <p class="hint" id="vcamHint"></p>
+          </div>
           <div class="cam-live" id="camLiveBox" style="display:none">
             <img id="camLivePreview" alt="实时画面预览" />
             <div class="cam-live-meta" id="camLiveMeta">—</div>

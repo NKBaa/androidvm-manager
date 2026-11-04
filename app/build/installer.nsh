@@ -25,5 +25,27 @@
       ${endif}
     ${endif}
     DeleteRegKey HKLM "Software\AndroidVM"
+
+    ; ---------- 虚拟摄像头驱动（Softcam）----------
+    ; 先杀掉喂帧进程，否则 DLL 被占用无法注销/删除
+    ExecWait 'taskkill /F /IM vcam_feeder.exe' $0
+
+    ReadRegStr $R7 HKLM "Software\AndroidVM\VirtualCamera" "DllPath"
+    ${if} $R7 != ""
+      ${if} ${FileExists} "$R7"
+        DetailPrint "正在注销虚拟摄像头：$R7"
+        ExecWait 'regsvr32 /u /s "$R7"' $0
+        Sleep 800
+      ${endif}
+    ${endif}
+    DeleteRegKey HKLM "Software\AndroidVM\VirtualCamera"
+
+    DetailPrint "正在删除虚拟摄像头文件"
+    ; NSIS 没有 $PROGRAMDATA，读环境变量最稳（不同 NSIS 版本变量名不一样）
+    ReadEnvStr $R6 "ProgramData"
+    ${if} $R6 != ""
+      RMDir /r "$R6\AndroidVM\vcam"
+      RMDir "$R6\AndroidVM"
+    ${endif}
   ${endif}
 !macroend

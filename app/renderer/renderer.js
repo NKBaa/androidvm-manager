@@ -729,22 +729,36 @@ async function startCamLive(rect) {
   $('btnCamLiveStop').style.display = '';
 
   if (!camLiveUnsub) camLiveUnsub = bridge.camera.onLiveFrame(onCamLiveFrame);
-  const r = await call(bridge.camera.liveStart({ rect, intervalMs: 2000 }), '开始实时跟随');
-  if (!r) {
+
+  const useVcam = !!vcamState.installed;
+  const r = await call(
+    bridge.camera.liveStart({ rect, intervalMs: 2000, useVirtualCamera: useVcam }),
+    '开始实时跟随'
+  );
+  if (!r || !r.ok) {
+    toast((r && r.message) || '启动实时跟随失败', 'err');
     await stopCamLive();
     return;
   }
 
-  // 同时把后置摄像头指向这个实时图片（支持 imagefile 的机器上就是真跟随）
-  const set = await call(
-    bridge.camera.set({ back: { mode: 'imagefile', path: r.file } }),
-    '切换到实时素材',
-    true
-  );
-  if (set && set.ok) {
-    toast('已开始实时跟随，重启虚拟机后摄像头会使用该画面', 'ok');
+  if (useVcam) {
+    // 把后置摄像头切到 Softcam 设备，这才是 Android 里真正能用的路径
+    const hosts = (await call(bridge.camera.hosts(), '枚举摄像头', true)) || [];
+    const sc = hosts.find((h) => /softcam/i.test(h.name || ''));
+    if (sc) {
+      await call(bridge.camera.set({ back: { mode: 'webcam', index: sc.index } }), '选择虚拟摄像头', true);
+      toast(`已切到虚拟摄像头「${sc.name}」，重启虚拟机后生效`, 'ok');
+    } else {
+      toast('实时帧已在推送，但摄像头列表里没找到 Softcam（可能需重启系统）', 'err');
+    }
   } else {
-    toast('已开始实时跟随（仅预览）', 'ok');
+    // 没装虚拟摄像头：退回「图片素材」方案（支持 imagefile 的机器上也能用）
+    const set = await call(
+      bridge.camera.set({ back: { mode: 'imagefile', path: r.file } }),
+      '切换到实时素材',
+      true
+    );
+    toast(set && set.ok ? '已开始实时跟随（图片素材模式），重启虚拟机后生效' : '已开始实时跟随（仅预览）', 'ok');
   }
   await refreshCamData();
 }
@@ -765,6 +779,76 @@ $('btnCamLive').addEventListener('click', () => {
 });
 
 $('btnCamLiveStop').addEventListener('click', stopCamLive);
+
+// ---------- 虚拟摄像头驱动（Softcam） ----------
+let vcamState = { installed: false };
+
+async function refreshVcam() {
+  const st = await call(bridge.vcam.status(), '虚拟摄像头状态', true);
+  if (!st) return;
+  vcamState = st;
+
+  const dot = $('vcamDot');
+  const text = $('vcamText');
+  const hint = $('vcamHint');
+  const btnIn = $('btnVcamInstall');
+  const btnUn = $('btnVcamUninstall');
+
+  if (st.installed) {
+    dot.className = 'vcam-dot on';
+    text.textContent = '虚拟摄像头：已安装（DirectShow Softcam）';
+    hint.textContent =
+      '「实时跟随屏幕区域」会通过它把画面送进 Android。选摄像头时选「DirectShow Softcam」即可。';
+    btnIn.style.display = 'none';
+    btnUn.style.display = '';
+  } else if (st.hasFiles && !st.registered) {
+    dot.className = 'vcam-dot warn';
+    text.textContent = '虚拟摄像头：文件已就位，但未注册';
+    hint.textContent = '点「安装」重新注册即可（需要管理员权限）。';
+    btnIn.style.display = '';
+    btnUn.style.display = 'none';
+  } else {
+    dot.className = 'vcam-dot';
+    text.textContent = '虚拟摄像头：未安装';
+    hint.textContent =
+      '安装后 Android 里就能选到「DirectShow Softcam」这个摄像头，实时跟随屏幕区域才真正可用。' +
+      '卸载本程序时会一并注销删除。';
+    btnIn.style.display = '';
+    btnUn.style.display = 'none';
+  }
+}
+
+$('btnVcamInstall').addEventListener('click', async () => {
+  const ok = window.confirm(
+    '将安装虚拟摄像头驱动（DirectShow Softcam）：\n\n' +
+      '  • 复制 2 个文件到 C:\\ProgramData\\AndroidVM\\vcam\\\n' +
+      '  • 注册为系统级摄像头（regsvr32）\n\n' +
+      '卸载本程序时会自动注销并删除。\n继续？'
+  );
+  if (!ok) return;
+  const btn = $('btnVcamInstall');
+  btn.disabled = true;
+  btn.textContent = '安装中…';
+  const r = await call(bridge.vcam.install(), '安装虚拟摄像头');
+  btn.disabled = false;
+  btn.textContent = '安装虚拟摄像头';
+  if (r && r.ok) {
+    toast('虚拟摄像头已安装，重启虚拟机后可在摄像头列表里选到', 'ok');
+  } else {
+    toast((r && r.message) || '安装失败', 'err');
+  }
+  await refreshVcam();
+  await refreshCamData();
+});
+
+$('btnVcamUninstall').addEventListener('click', async () => {
+  if (!window.confirm('卸载虚拟摄像头驱动？\n\n会注销并删除 C:\\ProgramData\\AndroidVM\\vcam\\ 下的文件。')) return;
+  const r = await call(bridge.vcam.uninstall(), '卸载虚拟摄像头');
+  if (r && r.ok) toast('已卸载虚拟摄像头', 'ok');
+  else toast((r && r.message) || '卸载失败', 'err');
+  await refreshVcam();
+  await refreshCamData();
+});
 
 function openRegionSelector() {
   return (async () => {
@@ -1937,6 +2021,7 @@ $('devSearch').addEventListener('input', (e) => {
   await refreshDevices();
   await loadConfig();
   await refreshCamData();
+  await refreshVcam();
   await refreshStatus();
 
   // 备份 / 还原进度条

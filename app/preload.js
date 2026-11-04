@@ -28,6 +28,11 @@ contextBridge.exposeInMainWorld('api', {
   windows: {
     arrange: (layout) => invoke('windows:arrange', layout),
   },
+  vcam: {
+    status: () => invoke('vcam:status'),
+    install: () => invoke('vcam:install'),
+    uninstall: () => invoke('vcam:uninstall'),
+  },
   update: {
     check: () => invoke('update:check'),
     download: () => invoke('update:download'),

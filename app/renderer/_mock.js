@@ -30,6 +30,11 @@
         vmRoot: 'C:\\Users\\me\\AppData\\Local\\Programs\\AndroidVM\\AndroidVM',
       }),
     onTaskProgress: () => () => {},
+    vcam: {
+      status: () => ok({ installed: false, hasFiles: true, registered: false, filterName: 'DirectShow Softcam' }),
+      install: () => ok({ ok: true }),
+      uninstall: () => ok({ ok: true }),
+    },
     windows: { arrange: () => ok({ ok: true, arranged: 2, running: 2 }) },
     update: {
       check: () => ok({ phase: 'available', message: '发现新版本 1.1.0', info: { version: '1.1.0', notes: '修复若干问题' }, packaged: true }),

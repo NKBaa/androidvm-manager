@@ -689,6 +689,33 @@ body {
 }
 .arrange-grid button:hover b { color: var(--acc); }
 
+/* ---------- 虚拟摄像头状态 ---------- */
+.vcam-box {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+.vcam-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--fg-2);
+}
+.vcam-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fg-3);
+  flex: 0 0 auto;
+}
+.vcam-dot.on { background: var(--green); }
+.vcam-dot.warn { background: var(--amber); }
+.vcam-box .hint { margin: 8px 0 0; }
+
 /* ---------- 摄像头实时预览 ---------- */
 .cam-live {
   margin-top: 10px;

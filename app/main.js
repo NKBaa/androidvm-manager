@@ -18,6 +18,7 @@ const cell = require('./src/cellular');
 const instances = require('./src/instances');
 const sdkdownloader = require('./src/sdkdownloader');
 const cameramod = require('./src/camera');
+const vcammod = require('./src/vcam');
 
 /** 桌面快捷方式传进来的 --instance=<id>，启动后自动选中并拉起该设备 */
 const startupInstanceId = (() => {
@@ -281,6 +282,10 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   quitting = true;
+  // 别让喂帧进程残留占着虚拟摄像头
+  try {
+    vcammod.stopFeeder();
+  } catch {}
 });
 
 app.on('window-all-closed', () => {
@@ -380,22 +385,50 @@ ipcMain.handle('sdk:download', wrap(async (opts) => {
   return { started: true, sdkRoot, packages, mirror };
 }));
 
+// ---------- 虚拟摄像头驱动（Softcam）----------
+ipcMain.handle('vcam:status', wrap(async () => vcammod.status()));
+ipcMain.handle('vcam:install', wrap(async () => vcammod.install()));
+ipcMain.handle('vcam:uninstall', wrap(async () => {
+  await vcammod.stopFeeder();
+  return vcammod.uninstall();
+}));
+
 // ---------- 摄像头实时跟随屏幕区域 ----------
 ipcMain.handle('camera:liveStart', wrap(async (opts) => {
+  const useVcam = !!(opts && opts.useVirtualCamera);
+  let feederInfo = null;
+
+  if (useVcam) {
+    const rect = (opts && opts.rect) || {};
+    // Softcam 要求宽高是 4 的倍数
+    const w = Math.max(4, Math.round((rect.w || 640) / 4) * 4);
+    const h = Math.max(4, Math.round((rect.h || 480) / 4) * 4);
+    const fps = Math.max(1, Math.min(30, Math.round(1000 / ((opts && opts.intervalMs) || 2000))));
+    feederInfo = await vcammod.startFeeder({ width: w, height: h, fps });
+    if (!feederInfo.ok) {
+      return { ok: false, message: feederInfo.message || '虚拟摄像头启动失败' };
+    }
+  }
+
   const send = (frame) => {
     try {
       if (win && !win.isDestroyed()) win.webContents.send('camera:live', frame);
     } catch {}
   };
+
   const r = await cameramod.startLive({
     rect: opts && opts.rect,
     intervalMs: opts && opts.intervalMs,
     onFrame: send,
+    onBgr: useVcam ? (buf) => vcammod.writeFrame(buf) : null,
   });
-  return r;
+  return { ...r, virtualCamera: useVcam, feeder: feederInfo };
 }));
 
-ipcMain.handle('camera:liveStop', wrap(async () => cameramod.stopLive()));
+ipcMain.handle('camera:liveStop', wrap(async () => {
+  await vcammod.stopFeeder();
+  return cameramod.stopLive();
+}));
 ipcMain.handle('camera:liveStatus', wrap(async () => cameramod.liveStatus()));
 
 ipcMain.handle('camera:hosts', wrap(async () => cameramod.listHostCameras()));
